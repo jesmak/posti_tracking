@@ -1,0 +1,43 @@
+{
+  "config": {
+    "error": {
+      "invalid_auth": "Kirjautuminen annetuilla tunnuksilla ei onnistunut",
+      "unknown": "Odottamaton virhe"
+    },
+    "step": {
+      "user": {
+        "title": "Posti paketinseuranta",
+        "description": "Paketinseurannan asetukset",
+        "data": {
+          "username": "Käyttäjätunnus",
+          "password": "Salasana",
+          "language": "Kieli",
+          "prioritize_undelivered": "Priorisoi keskeneräisiä lähetyksiä",
+          "max_shipments": "Näytettävien lähetysten enimmäismäärä",
+          "stale_shipment_day_limit": "Monenko päivän jälkeen jämähtänyt lähetys piilotetaan",
+          "completed_shipment_day_shown": "Montako päivää toimitetut lähetykset näytetään"
+        }
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_auth": "Kirjautuminen annetuilla tunnuksilla ei onnistunut",
+      "unknown": "Odottamaton virhe"
+    },
+    "step": {
+      "init": {
+        "title": "Posti paketinseuranta",
+        "description": "Paketinseurannan asetukset",
+        "data": {
+          "password": "Salasana",
+          "language": "Kieli",
+          "prioritize_undelivered": "Priorisoi keskeneräisiä lähetyksiä",
+          "max_shipments": "Näytettävien lähetysten enimmäismäärä",
+          "stale_shipment_day_limit": "Monenko päivän jälkeen jämähtänyt lähetys piilotetaan",
+          "completed_shipment_day_shown": "Montako päivää toimitetut lähetykset näytetään"
+        }
+      }
+    }
+  }
+}

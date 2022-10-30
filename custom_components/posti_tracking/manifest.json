@@ -1,0 +1,11 @@
+{
+  "codeowners": ["@jesmak"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/jesmak/posti_tracking",
+  "domain": "posti_tracking",
+  "iot_class": "cloud_polling",
+  "name": "Posti package tracking",
+  "requirements": [],
+  "version": "1.0.0"
+}
