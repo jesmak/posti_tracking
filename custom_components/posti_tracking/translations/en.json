@@ -1,0 +1,43 @@
+{
+  "config": {
+    "error": {
+      "invalid_auth": "Could not log in with provided credentials",
+      "unknown": "Unknown error occured"
+    },
+    "step": {
+      "user": {
+        "title": "Posti package tracking",
+        "description": "Package tracking settings",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "language": "Language",
+          "prioritize_undelivered": "Prioritize undelivered packages",
+          "max_shipments": "Maximum number of shipments to show",
+          "stale_shipment_day_limit": "How many days until stale shipments are hidden",
+          "completed_shipment_day_shown": "How many days until completed shipments are hidden"
+        }
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_auth": "Could not log in with provided credentials",
+      "unknown": "Unknown error occured"
+    },
+    "step": {
+      "init": {
+        "title": "Posti package tracking",
+        "description": "Package tracking settings",
+        "data": {
+          "password": "Password",
+          "language": "Language",
+          "prioritize_undelivered": "Prioritize undelivered packages",
+          "max_shipments": "Maximum number of shipments to show",
+          "stale_shipment_day_limit": "How many days until stale shipments are hidden",
+          "completed_shipment_day_shown": "How many days until completed shipments are hidden"
+        }
+      }
+    }
+  }
+}
