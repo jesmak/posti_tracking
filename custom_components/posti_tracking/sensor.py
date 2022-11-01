@@ -131,14 +131,12 @@ class PostiSensor(Entity):
 
             latest_timestamp = None
 
-            package_data = []
             delivered_packages = []
             undelivered_packages = []
 
             for shipment in data['shipment']:
 
-                latest_timestamp = shipment['savedDateTime'] if latest_timestamp is None or shipment[
-                    'savedDateTime'] > latest_timestamp else latest_timestamp
+                latest_timestamp = shipment['savedDateTime'] if latest_timestamp is None or shipment['savedDateTime'] > latest_timestamp else latest_timestamp
                 latest_event = shipment['events'][-1]
                 status = map_raw_status(shipment['shipmentPhase'])
                 last_status_change = datetime.fromisoformat(str(latest_event['timestamp']).removesuffix('Z'))
@@ -146,33 +144,19 @@ class PostiSensor(Entity):
                 delta = now - last_status_change
 
                 if status != 0 and delta.days <= self._stale_shipment_day_limit:
-                    if self._prioritize_undelivered:
-                        add_package(undelivered_packages, shipment, status, latest_event, self._language)
-                    elif len(package_data) < self._max_shipments:
-                        add_package(package_data, shipment, status, latest_event, self._language)
+                    add_package(undelivered_packages, shipment, status, latest_event, self._language)
+                elif status == 0 and delta.days <= self._completed_shipment_days_shown:
+                    add_package(delivered_packages, shipment, status, latest_event, self._language)
 
-                if status == 0 and delta.days <= self._completed_shipment_days_shown:
-                    if self._prioritize_undelivered:
-                        add_package(delivered_packages, shipment, status, latest_event, self._language)
-                    elif len(package_data) < self._max_shipments:
-                        add_package(package_data, shipment, status, latest_event, self._language)
+            delivered_packages.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
+            undelivered_packages.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
 
-            if self._prioritize_undelivered:
-                for package in undelivered_packages:
-                    if len(package_data) < self._max_shipments:
-                        package_data.append(package)
-                    else:
-                        break
+            package_data = undelivered_packages + delivered_packages
 
-                for package in delivered_packages:
-                    if len(package_data) < self._max_shipments:
-                        package_data.append(package)
-                    else:
-                        break
+            if not self._prioritize_undelivered:
+                package_data.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
 
-            package_data.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
-
-            self._attrs[ATTR_PACKAGES] = package_data
+            self._attrs[ATTR_PACKAGES] = package_data[0:min(len(package_data), self._max_shipments)]
             self._available = True
             self._state = latest_timestamp
 
@@ -183,22 +167,16 @@ class PostiSensor(Entity):
 def add_package(package_data: list, shipment: any, status: int, latest_event: any, language: str):
     package_data.append(
         {
-            ATTR_ORIGIN: next(iter([', '.join(value['name']) for value in shipment['parties'] if
-                                    value['role'] == 'CONSIGNOR']), None),
+            ATTR_ORIGIN: next(iter([', '.join(value['name']) for value in shipment['parties'] if value['role'] == 'CONSIGNOR']), None),
             ATTR_ORIGIN_CITY: shipment['departure']['city'],
-            ATTR_DESTINATION: next(iter([', '.join(value['name']) for value in shipment['parties'] if
-                                         value['role'] == 'DELIVERY']),
-                                   next(iter(
-                                       [', '.join(value['name']) for value in shipment['parties'] if
-                                        value['role'] == 'CONSIGNEE']), None)),
+            ATTR_DESTINATION: next(iter([', '.join(value['name']) for value in shipment['parties'] if value['role'] == 'DELIVERY']),
+                                   next(iter([', '.join(value['name']) for value in shipment['parties'] if value['role'] == 'CONSIGNEE']), None)),
             ATTR_DESTINATION_CITY: shipment['destination']['city'],
             ATTR_SHIPMENT_NUMBER: next(iter(shipment['trackingNumbers']), shipment['shipmentNumber']),
             ATTR_SHIPMENT_DATE: shipment['savedDateTime'],
             ATTR_STATUS: status,
             ATTR_RAW_STATUS: shipment['shipmentPhase'],
-            ATTR_LATEST_EVENT: next(iter(
-                [value['value'] for value in latest_event['eventDescription'] if
-                 value['lang'] == language]), None),
+            ATTR_LATEST_EVENT: next(iter([value['value'] for value in latest_event['eventDescription'] if value['lang'] == language]), None),
             ATTR_LATEST_EVENT_CITY: latest_event['eventLocation']['city'],
             ATTR_LATEST_EVENT_COUNTRY: latest_event['eventLocation']['country'],
             ATTR_LATEST_EVENT_DATE: latest_event['timestamp'],
