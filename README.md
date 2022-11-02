@@ -10,7 +10,7 @@ is updated automatically by retrieving tracking data from the user's account.
 
 ### Manual
 
-1. Download the source code
+1. Download source code from latest release tag
 2. Copy custom_components/posti_tracking folder to your Home Assistant installation's config/custom_components folder.
 3. Restart Home Assistant
 4. Configure the integration by adding a new integration in settings/integrations page of Home Assistant
