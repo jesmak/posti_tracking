@@ -95,11 +95,17 @@ class PostiSession:
 
     def call_api(self, data: str, reauthenticated=False) -> Optional[dict]:
         try:
+            role = next((x for x in self._tokens['role_tokens'] if x['type'] == 'consumer'), None)
+
+            if role is None:
+                raise PostiException("Failed to get consumer role")
+
             response = requests.post(
                 url=GRAPH_API_URL,
                 headers={
                     "Authorization": f"Bearer {self._tokens['id_token']}",
                     "Content-Type": "application/json",
+                    "X-Omaposti-Roles": role['token']
                 },
                 json=json.loads(data),
                 timeout=self._timeout,
