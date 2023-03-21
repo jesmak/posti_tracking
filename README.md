@@ -20,8 +20,8 @@ is updated automatically by retrieving tracking data from the user's account.
 
 | Name                         | Type    | Requirement  | Description                                          | Default             |
 | ---------------------------- | ------- | ------------ | ---------------------------------------------------- | ------------------- |
-| username                     | string  | **Required** | Username of your Matkahuolto account (your email)    |                     |
-| password                     | string  | **Required** | Password of your Matkahuolto account                 |                     |
+| username                     | string  | **Required** | Username of your Posti account (your email)          |                     |
+| password                     | string  | **Required** | Password of your Posti account                       |                     |
 | language                     | string  | **Required** | Used language (fi or en)                             | `en`                |
 | prioritize_undelivered       | boolean | **Required** | Toggle this if you want undelivered packages to be shown first, when there are more than the maximum allowed amount of packages available | `true`              |
 | max_shipments                | int     | **Required** | Maximum number of packages to retrieve               | `5`                 |
