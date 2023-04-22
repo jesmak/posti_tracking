@@ -134,13 +134,18 @@ class PostiSensor(Entity):
             delivered_packages = []
             undelivered_packages = []
 
+            now = datetime.now()
+
             for shipment in data['shipment']:
 
-                latest_timestamp = shipment['savedDateTime'] if latest_timestamp is None or shipment['savedDateTime'] > latest_timestamp else latest_timestamp
                 latest_event = shipment['events'][-1]
-                status = map_raw_status(shipment['shipmentPhase'])
                 last_status_change = datetime.fromisoformat(str(latest_event['timestamp']).removesuffix('Z'))
-                now = datetime.now()
+
+                if latest_timestamp is None or last_status_change > latest_timestamp:
+                    latest_timestamp = last_status_change
+
+                status = map_raw_status(shipment['shipmentPhase'])
+
                 delta = now - last_status_change
 
                 if status != 0 and delta.days <= self._stale_shipment_day_limit:
