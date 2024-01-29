@@ -8,6 +8,13 @@ is updated automatically by retrieving tracking data from the user's account.
 
 ## Installation
 
+### With HACS
+
+1. Add this repository to HACS custom repositories
+2. Search for Matkahuolto tracking in HACS and install
+3. Restart Home Assistant
+4. Enter your account credentials and configre other settings as you wish
+
 ### Manual
 
 1. Download source code from latest release tag
