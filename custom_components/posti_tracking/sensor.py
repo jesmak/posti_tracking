@@ -5,11 +5,11 @@ from typing import Any, Callable, Dict, Optional
 from aiohttp import ClientError
 
 from homeassistant import config_entries, core
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import (
     ConfigType,
     DiscoveryInfoType,
-    HomeAssistantType,
 )
 
 from .session import PostiSession
@@ -37,7 +37,7 @@ ATTR_SOURCE = "source"
 
 
 async def async_setup_platform(
-        hass: HomeAssistantType,
+        hass: HomeAssistant,
         config: ConfigType,
         async_add_entities: Callable,
         discovery_info: Optional[DiscoveryInfoType] = None,
@@ -137,21 +137,21 @@ class PostiSensor(Entity):
             now = datetime.now()
 
             for shipment in data['shipment']:
+                if len(shipment['events']) > 0:
+                    latest_event = shipment['events'][-1]
+                    last_status_change = datetime.fromisoformat(str(latest_event['timestamp']).removesuffix('Z'))
 
-                latest_event = shipment['events'][-1]
-                last_status_change = datetime.fromisoformat(str(latest_event['timestamp']).removesuffix('Z'))
+                    if latest_timestamp is None or last_status_change > latest_timestamp:
+                        latest_timestamp = last_status_change
 
-                if latest_timestamp is None or last_status_change > latest_timestamp:
-                    latest_timestamp = last_status_change
+                    status = map_raw_status(shipment['shipmentPhase'])
 
-                status = map_raw_status(shipment['shipmentPhase'])
+                    delta = now - last_status_change
 
-                delta = now - last_status_change
-
-                if status != 0 and delta.days <= self._stale_shipment_day_limit:
-                    add_package(undelivered_packages, shipment, status, latest_event, self._language)
-                elif status == 0 and delta.days <= self._completed_shipment_days_shown:
-                    add_package(delivered_packages, shipment, status, latest_event, self._language)
+                    if status != 0 and delta.days <= self._stale_shipment_day_limit:
+                        add_package(undelivered_packages, shipment, status, latest_event, self._language)
+                    elif status == 0 and delta.days <= self._completed_shipment_days_shown:
+                        add_package(delivered_packages, shipment, status, latest_event, self._language)
 
             delivered_packages.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
             undelivered_packages.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
