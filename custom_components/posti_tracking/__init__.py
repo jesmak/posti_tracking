@@ -15,9 +15,7 @@ async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.Conf
     hass_data["unsub_options_update_listener"] = unsub_options_update_listener
     hass.data[DOMAIN][entry.entry_id] = hass_data
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "sensor")
-    )
+    await hass.config_entries.async_forward_entry_setup(entry, "sensor")
 
     return True
 
