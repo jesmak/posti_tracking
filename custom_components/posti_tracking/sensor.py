@@ -148,9 +148,9 @@ class PostiSensor(Entity):
 
                     delta = now - last_status_change
 
-                    if status != 0 and delta.days <= self._stale_shipment_day_limit:
+                    if status != 0 and status != 6 and delta.days <= self._stale_shipment_day_limit:
                         add_package(undelivered_packages, shipment, status, latest_event, self._language)
-                    elif status == 0 and delta.days <= self._completed_shipment_days_shown:
+                    elif (status == 0 or status == 6) and delta.days <= self._completed_shipment_days_shown:
                         add_package(delivered_packages, shipment, status, latest_event, self._language)
 
             delivered_packages.sort(key=lambda x: x[ATTR_LATEST_EVENT_DATE], reverse=True)
