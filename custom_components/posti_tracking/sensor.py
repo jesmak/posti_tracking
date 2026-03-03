@@ -42,17 +42,24 @@ async def async_setup_platform(
         async_add_entities: Callable,
         discovery_info: Optional[DiscoveryInfoType] = None,
 ) -> None:
+    # Try to load stored tokens (not available in platform setup, will authenticate)
     session = PostiSession(config[CONF_USERNAME], config[CONF_PASSWORD])
-    await hass.async_add_executor_job(session.authenticate)
+    
+    # Authenticate if no valid tokens
+    if session.get_tokens() is None or session._is_token_expired():
+        await hass.async_add_executor_job(session.authenticate)
+    
     async_add_entities(
         [PostiSensor(
+            hass,
             session,
             config[CONF_USERNAME],
             config[CONF_LANGUAGE],
             config[CONF_PRIORITIZE_UNDELIVERED],
             config[CONF_MAX_SHIPMENTS],
             config[CONF_STALE_SHIPMENT_DAY_LIMIT],
-            config[CONF_COMPLETED_SHIPMENT_DAYS_SHOWN]
+            config[CONF_COMPLETED_SHIPMENT_DAYS_SHOWN],
+            None  # No config entry for platform setup
         )],
         update_before_add=True
     )
@@ -62,17 +69,29 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry: config_entri
     config = hass.data[DOMAIN][config_entry.entry_id]
     if config_entry.options:
         config.update(config_entry.options)
-    session = PostiSession(config[CONF_USERNAME], config[CONF_PASSWORD])
-    await hass.async_add_executor_job(session.authenticate)
+    
+    # Load stored tokens from config entry data
+    stored_tokens = config_entry.data.get("tokens")
+    session = PostiSession(config[CONF_USERNAME], config[CONF_PASSWORD], stored_tokens=stored_tokens)
+    
+    # Authenticate only if no valid tokens
+    if session.get_tokens() is None or session._is_token_expired():
+        await hass.async_add_executor_job(session.authenticate)
+        # Save tokens to config entry
+        new_data = {**config_entry.data, "tokens": session.get_tokens()}
+        hass.config_entries.async_update_entry(config_entry, data=new_data)
+    
     async_add_entities(
         [PostiSensor(
+            hass,
             session,
             config[CONF_USERNAME],
             config[CONF_LANGUAGE],
             config[CONF_PRIORITIZE_UNDELIVERED],
             config[CONF_MAX_SHIPMENTS],
             config[CONF_STALE_SHIPMENT_DAY_LIMIT],
-            config[CONF_COMPLETED_SHIPMENT_DAYS_SHOWN]
+            config[CONF_COMPLETED_SHIPMENT_DAYS_SHOWN],
+            config_entry
         )],
         update_before_add=True
     )
@@ -85,15 +104,18 @@ class PostiSensor(Entity):
 
     def __init__(
             self,
+            hass: HomeAssistant,
             session: PostiSession,
             username: str,
             language: str,
             prioritize_undelivered: bool,
             max_shipments: int,
             stale_shipment_day_limit: int,
-            completed_shipment_days_shown: int
+            completed_shipment_days_shown: int,
+            config_entry: Optional[config_entries.ConfigEntry] = None
     ):
         super().__init__()
+        self.hass = hass
         self._session = session
         self._username = username
         self._language = language
@@ -101,6 +123,7 @@ class PostiSensor(Entity):
         self._max_shipments = max_shipments
         self._stale_shipment_day_limit = stale_shipment_day_limit
         self._completed_shipment_days_shown = completed_shipment_days_shown
+        self._config_entry = config_entry
         self._state = None
         self._available = True
         self._attrs = {}
@@ -125,9 +148,20 @@ class PostiSensor(Entity):
     def state(self) -> Optional[str]:
         return self._state
 
+    def _save_tokens(self):
+        """Save tokens to config entry for persistence"""
+        if self._config_entry:
+            tokens = self._session.get_tokens()
+            if tokens:
+                new_data = {**self._config_entry.data, "tokens": tokens}
+                self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
+
     async def async_update(self):
         try:
             data = await self.hass.async_add_executor_job(self._session.call_api, QUERY_GET_SHIPMENTS)
+
+            # Save tokens if they were refreshed
+            self._save_tokens()
 
             latest_timestamp = None
 

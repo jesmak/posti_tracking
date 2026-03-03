@@ -2,7 +2,8 @@ DOMAIN = "posti_tracking"
 AUTH_SERVICE_BASE_URL = "https://auth-service.posti.fi/api/v1"
 UAS_BASE_URL = "https://todentaminen.posti.fi/uas"
 GRAPH_API_URL = "https://oma.posti.fi/graphql/v2"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.5249.62 Safari/537.36"
+# Mobile app User-Agent for WebView requests
+USER_AGENT = "Mozilla/5.0 (Linux; Android 16; sdk_gphone64_x86_64 Build/BE2A.250530.026.F3; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/133.0.6943.137 Mobile Safari/537.36 OmaPostiAndroid/6.0.23+7405/WebView(133.0.6943.137)"
 LANGUAGES = ["fi", "en"]
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
