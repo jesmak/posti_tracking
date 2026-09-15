@@ -1,42 +1,71 @@
 {
   "config": {
-    "error": {
-      "invalid_auth": "Could not log in with provided credentials",
-      "unknown": "Unknown error occured"
-    },
     "step": {
       "user": {
         "title": "Posti package tracking",
-        "description": "Package tracking settings",
+        "description": "The coming and recently delivered packages of your OmaPosti account. Posti package tracking logs in like the OmaPosti app, with your user name and password.",
         "data": {
-          "username": "Username",
+          "username": "User name",
           "password": "Password",
           "language": "Language",
-          "prioritize_undelivered": "Prioritize undelivered packages",
-          "max_shipments": "Maximum number of shipments to show",
-          "stale_shipment_day_limit": "How many days until stale shipments are hidden",
-          "completed_shipment_day_shown": "How many days until completed shipments are hidden"
+          "prioritize_undelivered": "Undelivered packages first",
+          "max_shipments": "Maximum number of packages",
+          "stale_shipment_day_limit": "Days until undelivered packages are hidden",
+          "completed_shipment_day_shown": "Days until delivered packages are hidden"
+        },
+        "data_description": {
+          "username": "The email address you log in to OmaPosti with. The sensor is named after it.",
+          "password": "Saved in Home Assistant, for logging in again when the saved login expires.",
+          "language": "Language of the package event descriptions.",
+          "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
+          "max_shipments": "How many packages the sensor lists.",
+          "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
+          "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Password for {username}",
+        "description": "Posti no longer accepts the saved password. Enter the password of your OmaPosti account.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Posti package tracking",
+        "description": "Settings of {username}.",
+        "data": {
+          "password": "Password",
+          "language": "Language",
+          "prioritize_undelivered": "Undelivered packages first",
+          "max_shipments": "Maximum number of packages",
+          "stale_shipment_day_limit": "Days until undelivered packages are hidden",
+          "completed_shipment_day_shown": "Days until delivered packages are hidden"
+        },
+        "data_description": {
+          "password": "Leave empty to keep the saved password.",
+          "language": "Language of the package event descriptions.",
+          "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
+          "max_shipments": "How many packages the sensor lists.",
+          "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
+          "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered."
         }
       }
+    },
+    "error": {
+      "invalid_auth": "Posti didn't accept the user name and password.",
+      "cannot_connect": "Posti couldn't be reached. Try again in a moment."
+    },
+    "abort": {
+      "already_configured": "This account has already been added.",
+      "reauth_successful": "The password works and has been saved.",
+      "reconfigure_successful": "Settings saved."
     }
   },
-  "options": {
-    "error": {
-      "invalid_auth": "Could not log in with provided credentials",
-      "unknown": "Unknown error occured"
-    },
-    "step": {
-      "init": {
-        "title": "Posti package tracking",
-        "description": "Package tracking settings",
-        "data": {
-          "password": "Password",
-          "language": "Language",
-          "prioritize_undelivered": "Prioritize undelivered packages",
-          "max_shipments": "Maximum number of shipments to show",
-          "stale_shipment_day_limit": "How many days until stale shipments are hidden",
-          "completed_shipment_day_shown": "How many days until completed shipments are hidden"
-        }
+  "selector": {
+    "language": {
+      "options": {
+        "fi": "Suomi",
+        "en": "English"
       }
     }
   }

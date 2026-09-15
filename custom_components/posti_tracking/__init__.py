@@ -1,44 +1,42 @@
-import asyncio
-import logging
+"""Posti package tracking: the coming and recently delivered packages of an OmaPosti account.
 
-from homeassistant import config_entries, core
+Each config entry is one account, with a sensor that lists its packages in the
+format package-tracker-card shows.
+"""
 
-from .const import DOMAIN
+from __future__ import annotations
 
-_LOGGER = logging.getLogger(__name__)
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+
+from .const import CONF_USERNAME, DOMAIN
+from .coordinator import PostiConfigEntry, PostiCoordinator
+
+PLATFORMS = [Platform.SENSOR]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.ConfigEntry) -> bool:
-    hass.data.setdefault(DOMAIN, {})
-    hass_data = dict(entry.data)
-    unsub_options_update_listener = entry.add_update_listener(options_update_listener)
-    hass_data["unsub_options_update_listener"] = unsub_options_update_listener
-    hass.data[DOMAIN][entry.entry_id] = hass_data
-
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
-
+async def async_setup_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> bool:
+    coordinator = PostiCoordinator(hass, entry)
+    # A password Posti no longer accepts starts reauthentication; Posti being down retries the setup later.
+    await coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-async def options_update_listener(hass: core.HomeAssistant, config_entry: config_entries.ConfigEntry):
-    await hass.config_entries.async_reload(config_entry.entry_id)
+async def async_unload_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> bool:
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def async_unload_entry(hass: core.HomeAssistant, entry: config_entries.ConfigEntry) -> bool:
-    unload_ok = all(
-        await asyncio.gather(
-            *[hass.config_entries.async_forward_entry_unload(entry, "sensor")]
+async def async_migrate_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> bool:
+    """Gives entries of 1.x versions a unique id: the account's user name."""
+    if entry.version != 1:
+        return False
+    if entry.minor_version < 2:
+        hass.config_entries.async_update_entry(
+            entry, unique_id=entry.data[CONF_USERNAME].strip().lower(), minor_version=2
         )
-    )
-
-    hass.data[DOMAIN][entry.entry_id]["unsub_options_update_listener"]()
-
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-
-    return unload_ok
-
-
-async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:
-    hass.data.setdefault(DOMAIN, {})
     return True

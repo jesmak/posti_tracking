@@ -1,0 +1,19 @@
+# Development settings only; Home Assistant installs the integration from custom_components/.
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+# py313 keeps `except (A, B):` parenthesised; the 3.14 form without parentheses is easy to misread.
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components"]
+known-third-party = ["homeassistant"]

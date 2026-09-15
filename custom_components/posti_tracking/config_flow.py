@@ -1,124 +1,174 @@
-import logging
+"""Config flow: an account is added with the user name and password of OmaPosti.
 
-import homeassistant.helpers.config_validation as cv
+Logging in gives the tokens, which are saved with the entry. The coordinator
+renews and saves them later; when Posti no longer accepts the password,
+reauthentication asks for it again. Settings are changed by reconfiguring.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
 import voluptuous as vol
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
-from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 from .const import (
-    DOMAIN,
-    CONF_USERNAME,
-    CONF_PASSWORD,
+    CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
     CONF_LANGUAGE,
     CONF_MAX_SHIPMENTS,
+    CONF_PASSWORD,
+    CONF_PRIORITIZE_UNDELIVERED,
     CONF_STALE_SHIPMENT_DAY_LIMIT,
-    CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    CONF_TOKENS,
+    CONF_USERNAME,
+    DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    DEFAULT_MAX_SHIPMENTS,
+    DEFAULT_PRIORITIZE_UNDELIVERED,
+    DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
+    DOMAIN,
     LANGUAGES,
-    CONF_PRIORITIZE_UNDELIVERED
 )
-from .session import PostiException, PostiSession
+from .exceptions import PostiAuthError, PostiError
+from .login import log_in
 
-_LOGGER = logging.getLogger(__name__)
+PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password"))
+DAYS_SELECTOR = NumberSelector(NumberSelectorConfig(min=0, max=365, step=1, mode=NumberSelectorMode.BOX))
 
-CONFIGURE_SCHEMA = vol.Schema(
+SETTING_FIELDS = {
+    vol.Required(CONF_LANGUAGE): SelectSelector(
+        SelectSelectorConfig(options=LANGUAGES, translation_key=CONF_LANGUAGE, mode=SelectSelectorMode.DROPDOWN)
+    ),
+    vol.Required(CONF_PRIORITIZE_UNDELIVERED): BooleanSelector(),
+    vol.Required(CONF_MAX_SHIPMENTS): NumberSelector(
+        NumberSelectorConfig(min=1, max=50, step=1, mode=NumberSelectorMode.BOX)
+    ),
+    vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT): DAYS_SELECTOR,
+    vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN): DAYS_SELECTOR,
+}
+
+USER_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_USERNAME): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_LANGUAGE): vol.All(cv.string, vol.In(LANGUAGES)),
-        vol.Required(CONF_PRIORITIZE_UNDELIVERED, default=True): cv.boolean,
-        vol.Required(CONF_MAX_SHIPMENTS, default=5): cv.positive_int,
-        vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT, default=15): cv.positive_int,
-        vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN, default=3): cv.positive_int
+        vol.Required(CONF_USERNAME): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete="username")
+        ),
+        vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
+        **SETTING_FIELDS,
     }
 )
-
-RECONFIGURE_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_LANGUAGE): vol.All(cv.string, vol.In(LANGUAGES)),
-        vol.Required(CONF_PRIORITIZE_UNDELIVERED): cv.boolean,
-        vol.Required(CONF_MAX_SHIPMENTS): cv.positive_int,
-        vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT): cv.positive_int,
-        vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN): cv.positive_int
-    }
-)
+# The saved password isn't shown; an empty field keeps it.
+RECONFIGURE_SCHEMA = vol.Schema({vol.Optional(CONF_PASSWORD): PASSWORD_SELECTOR, **SETTING_FIELDS})
+REAUTH_SCHEMA = vol.Schema({vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR})
 
 
-async def validate_input(hass: HomeAssistant, data: dict[str, any]) -> str:
+def clean_settings(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Submitted settings, normalised for storing."""
+    data = {key: user_input[key] for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED) if key in user_input}
+    for key in (CONF_MAX_SHIPMENTS, CONF_STALE_SHIPMENT_DAY_LIMIT, CONF_COMPLETED_SHIPMENT_DAYS_SHOWN):
+        if key in user_input:
+            data[key] = int(user_input[key])
+    return data
+
+
+async def try_login(hass: HomeAssistant, username: str, password: str) -> tuple[dict[str, str], dict[str, Any]]:
+    """Logs in. Returns the errors, and the tokens when the login worked."""
     try:
-        session = PostiSession(data["username"], data["password"])
-        await hass.async_add_executor_job(session.authenticate)
+        tokens = await hass.async_add_executor_job(log_in, username, password)
+    except PostiAuthError:
+        return {"base": "invalid_auth"}, {}
+    except PostiError:
+        return {"base": "cannot_connect"}, {}
+    return {}, tokens
 
-    except PostiException:
-        raise InvalidAuth
 
-    return data["username"]
-
-
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
+    # 1.1 entries have no unique id; __init__.async_migrate_entry gives them one.
     VERSION = 1
+    MINOR_VERSION = 2
 
-    async def async_step_user(self, user_input: dict[str, any] = None) -> FlowResult:
-        if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=CONFIGURE_SCHEMA)
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            username = str(user_input[CONF_USERNAME]).strip()
+            await self.async_set_unique_id(username.lower())
+            self._abort_if_unique_id_configured()
+            errors, tokens = await try_login(self.hass, username, user_input[CONF_PASSWORD])
+            if not errors:
+                return self.async_create_entry(
+                    title=username,
+                    data={
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                        **clean_settings(user_input),
+                        CONF_TOKENS: tokens,
+                    },
+                )
 
-        errors = {}
+        values = {**user_input, CONF_PASSWORD: ""} if user_input else self._defaults()
+        return self.async_show_form(
+            step_id="user", data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, values), errors=errors
+        )
 
-        try:
-            info = await validate_input(self.hass, user_input)
-        except InvalidAuth:
-            errors["base"] = "invalid_auth"
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            return self.async_create_entry(title=info, data=user_input)
+    def _defaults(self) -> dict[str, Any]:
+        language = self.hass.config.language[:2]
+        return {
+            CONF_LANGUAGE: language if language in LANGUAGES else "en",
+            CONF_PRIORITIZE_UNDELIVERED: DEFAULT_PRIORITIZE_UNDELIVERED,
+            CONF_MAX_SHIPMENTS: DEFAULT_MAX_SHIPMENTS,
+            CONF_STALE_SHIPMENT_DAY_LIMIT: DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
+            CONF_COMPLETED_SHIPMENT_DAYS_SHOWN: DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+        }
 
-        return self.async_show_form(step_id="user", data_schema=CONFIGURE_SCHEMA, errors=errors)
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+        return await self.async_step_reauth_confirm()
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        return OptionsFlowHandler(config_entry)
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The password again, when Posti no longer accepts the saved one."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors, tokens = await try_login(self.hass, entry.data[CONF_USERNAME], user_input[CONF_PASSWORD])
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry, data={**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD], CONF_TOKENS: tokens}
+                )
 
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=REAUTH_SCHEMA,
+            errors=errors,
+            description_placeholders={"username": entry.data[CONF_USERNAME]},
+        )
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Changing the settings or password of an account."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = {**entry.data, **clean_settings(user_input)}
+            if password := user_input.get(CONF_PASSWORD):
+                errors, tokens = await try_login(self.hass, entry.data[CONF_USERNAME], password)
+                data |= {CONF_PASSWORD: password, CONF_TOKENS: tokens}
+            if not errors:
+                return self.async_update_reload_and_abort(entry, data=data)
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self._config_entry = config_entry
-
-    async def async_step_init(self, user_input: dict[str, any] = None) -> FlowResult:
-        if user_input is None:
-            return self.async_show_form(
-                step_id="init", data_schema=vol.Schema(
-                    {
-                        vol.Required(CONF_PASSWORD, default=self._config_entry.data.get(CONF_PASSWORD)): cv.string,
-                        vol.Required(CONF_LANGUAGE, default=self._config_entry.data.get(CONF_LANGUAGE)): vol.All(cv.string, vol.In(LANGUAGES)),
-                        vol.Required(CONF_PRIORITIZE_UNDELIVERED, default=self._config_entry.data.get(CONF_PRIORITIZE_UNDELIVERED)): cv.boolean,
-                        vol.Optional(CONF_MAX_SHIPMENTS, default=self._config_entry.data.get(CONF_MAX_SHIPMENTS)): cv.positive_int,
-                        vol.Optional(CONF_STALE_SHIPMENT_DAY_LIMIT, default=self._config_entry.data.get(CONF_STALE_SHIPMENT_DAY_LIMIT)): cv.positive_int,
-                        vol.Optional(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN, default=self._config_entry.data.get(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN)): cv.positive_int
-                    })
-            )
-
-        errors = {}
-
-        try:
-            user_input["username"] = self._config_entry.data[CONF_USERNAME]
-            await validate_input(self.hass, user_input)
-        except InvalidAuth:
-            errors["base"] = "invalid_auth"
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            self.hass.config_entries.async_update_entry(self._config_entry, data=user_input, options=self._config_entry.options)
-            return self.async_create_entry(title="", data={})
-
-        return self.async_show_form(step_id="init", data_schema=RECONFIGURE_SCHEMA, errors=errors)
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate authentication credentials where invalid"""
+        values = {key: value for key, value in (user_input or entry.data).items() if key != CONF_PASSWORD}
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(RECONFIGURE_SCHEMA, values),
+            errors=errors,
+            description_placeholders={"username": entry.data[CONF_USERNAME]},
+        )
