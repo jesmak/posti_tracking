@@ -1,5 +1,17 @@
 # Posti package tracking for Home Assistant
 
+Home Assistant integration that follows the packages of an OmaPosti account.
+
+[![GitHub Release][releases-shield]][releases]
+[![License][license-shield]](LICENSE)
+[![GitHub Activity][commits-shield]][commits]
+
+## Support
+
+Hey dude! Help me out for a couple of :beers: or a :coffee:!
+
+[![coffee](https://www.buymeacoffee.com/assets/img/custom_images/black_img.png)](https://www.buymeacoffee.com/jesmak)
+
 ## What is it?
 
 A custom component that lists the coming and recently delivered packages of an [OmaPosti](https://oma.posti.fi/)
@@ -114,3 +126,9 @@ python3.14 -m venv .venv
 | `shipments.py`                 | Turning shipments into the sensor's packages              |
 | `sensor.py`                    | The sensor                                                |
 | `translations/<language>.json` | Home Assistant UI texts                                   |
+
+[commits-shield]: https://img.shields.io/github/commit-activity/y/jesmak/posti_tracking.svg?style=for-the-badge
+[commits]: https://github.com/jesmak/posti_tracking/commits/master
+[license-shield]: https://img.shields.io/github/license/jesmak/posti_tracking.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/jesmak/posti_tracking.svg?style=for-the-badge
+[releases]: https://github.com/jesmak/posti_tracking/releases
