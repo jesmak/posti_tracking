@@ -87,15 +87,7 @@ aren't stored in the recorder, only the state. The sensor is unavailable while P
 
 ## Upgrading from 1.x
 
-Nothing needs to be done: the account, its saved login, the sensor and its attributes carry over. What changes:
-
-- **Settings** are changed with **Reconfigure** instead of the options dialog, and the saved password is no longer
-  shown in the form.
-- **Login problems:** when Posti no longer accepts the password, Home Assistant asks for it instead of the sensor just
-  failing. Tokens renewed without all of their parts no longer break the next update.
-- **The sensor** is a timestamp sensor, and its packages are no longer stored in the recorder. Its time was
-  Posti's UTC time shown as local time before, which made it hours early in Finland.
-- **Descriptions:** a package without a description in the chosen language gets one in another language.
+Nothing needs to be done: the account, its saved login, the sensor and its attributes carry over.
 
 ## Data
 
