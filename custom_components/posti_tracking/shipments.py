@@ -13,10 +13,12 @@ from typing import Any
 
 from .const import (
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    CONF_INCLUDE_PICKUP_DETAILS,
     CONF_MAX_SHIPMENTS,
     CONF_PRIORITIZE_UNDELIVERED,
     CONF_STALE_SHIPMENT_DAY_LIMIT,
     DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    DEFAULT_INCLUDE_PICKUP_DETAILS,
     DEFAULT_MAX_SHIPMENTS,
     DEFAULT_PRIORITIZE_UNDELIVERED,
     DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
@@ -52,6 +54,8 @@ class PackageSettings:
     # Unfinished packages whose latest event is older are hidden: some stay "in delivery" for good.
     stale_shipment_day_limit: int
     completed_shipment_days_shown: int
+    # The pickup point and the code that opens the locker, which not everyone wants on a dashboard.
+    include_pickup_details: bool
 
     @classmethod
     def from_data(cls, data: Mapping[str, Any]) -> PackageSettings:
@@ -62,6 +66,7 @@ class PackageSettings:
             completed_shipment_days_shown=int(
                 data.get(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN, DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN)
             ),
+            include_pickup_details=bool(data.get(CONF_INCLUDE_PICKUP_DETAILS, DEFAULT_INCLUDE_PICKUP_DETAILS)),
         )
 
 
@@ -99,9 +104,9 @@ def build_packages(
         status = map_raw_status(shipment.get("shipmentPhase"))
         age_days = (now - changed).days
         if status not in FINISHED and age_days <= settings.stale_shipment_day_limit:
-            unfinished.append((changed, package(shipment, event, status, language)))
+            unfinished.append((changed, package(shipment, event, status, language, settings)))
         elif status in FINISHED and age_days <= settings.completed_shipment_days_shown:
-            finished.append((changed, package(shipment, event, status, language)))
+            finished.append((changed, package(shipment, event, status, language, settings)))
 
     unfinished.sort(key=change_time, reverse=True)
     finished.sort(key=change_time, reverse=True)
@@ -115,10 +120,17 @@ def change_time(item: tuple[datetime, dict[str, Any]]) -> datetime:
     return item[0]
 
 
-def package(shipment: Mapping[str, Any], event: Mapping[str, Any], status: int, language: str) -> dict[str, Any]:
+def package(
+    shipment: Mapping[str, Any],
+    event: Mapping[str, Any],
+    status: int,
+    language: str,
+    settings: PackageSettings,
+) -> dict[str, Any]:
     parties = [party for party in shipment.get("parties") or [] if isinstance(party, Mapping)]
     location = event.get("eventLocation") if isinstance(event.get("eventLocation"), Mapping) else {}
     tracking_numbers = shipment.get("trackingNumbers") or []
+    point = shipment.get("pickupPoint") if isinstance(shipment.get("pickupPoint"), Mapping) else {}
     return {
         "origin": party_name(parties, "CONSIGNOR"),
         "origin_city": city(shipment.get("departure")),
@@ -133,8 +145,49 @@ def package(shipment: Mapping[str, Any], event: Mapping[str, Any], status: int, 
         "latest_event_city": location.get("city"),
         "latest_event_country": location.get("country"),
         "latest_event_date": event.get("timestamp"),
+        "estimated_delivery": shipment.get("estimatedDeliveryTime"),
+        # Posti doesn't tell how long a package is kept; Matkahuolto does.
+        "pickup_deadline": None,
+        "weight": number(shipment.get("grossWeight")),
+        "package_count": whole_number(shipment.get("packageQuantity")),
+        "pickup_point": pickup_point(point) if settings.include_pickup_details else None,
+        "pickup_code": pickup_code(point) if settings.include_pickup_details else None,
         "source": "Posti",
     }
+
+
+def pickup_point(point: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Where the package is picked up: the locker or counter, with its address."""
+    location = point.get("location") if isinstance(point.get("location"), Mapping) else {}
+    found = {
+        "name": point.get("lockerAddress"),
+        "street": location.get("street1"),
+        "postal_code": location.get("postCode"),
+        "city": location.get("city"),
+        "type": point.get("type"),
+        "available": point.get("availabilityTime"),
+    }
+    return found if any(value for value in found.values()) else None
+
+
+def pickup_code(point: Mapping[str, Any]) -> str | None:
+    """The code that opens the locker, or the one given at a counter."""
+    code = point.get("lockerCode") or point.get("pupCode")
+    return str(code) if code else None
+
+
+def number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def whole_number(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def party_name(parties: list[Mapping[str, Any]], role: str) -> str | None:

@@ -13,7 +13,7 @@ from homeassistant.helpers import config_validation as cv
 from .const import CONF_USERNAME, DOMAIN
 from .coordinator import PostiConfigEntry, PostiCoordinator
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.EVENT, Platform.SENSOR]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 

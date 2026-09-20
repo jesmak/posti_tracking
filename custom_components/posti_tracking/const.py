@@ -35,9 +35,13 @@ CONF_MAX_SHIPMENTS: Final = "max_shipments"
 CONF_STALE_SHIPMENT_DAY_LIMIT: Final = "stale_shipment_day_limit"
 CONF_COMPLETED_SHIPMENT_DAYS_SHOWN: Final = "completed_shipment_day_shown"
 # The tokens of the latest login, saved so that a restart doesn't need a new login.
+CONF_INCLUDE_PICKUP_DETAILS: Final = "include_pickup_details"
+
 CONF_TOKENS: Final = "tokens"
 
 DEFAULT_PRIORITIZE_UNDELIVERED: Final = True
+# The pickup point and its code are left out unless asked for: the code opens the locker.
+DEFAULT_INCLUDE_PICKUP_DETAILS: Final = False
 DEFAULT_MAX_SHIPMENTS: Final = 5
 DEFAULT_STALE_SHIPMENT_DAY_LIMIT: Final = 15
 DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN: Final = 3
@@ -78,5 +82,20 @@ fragment ShipmentFields on shipment {
   }
   shipmentPhase
   savedDateTime
+  estimatedDeliveryTime
+  grossWeight
+  packageQuantity
+  pickupPoint {
+    type
+    lockerAddress
+    lockerCode
+    pupCode
+    availabilityTime
+    location {
+      street1
+      postCode
+      city
+    }
+  }
 }
 """

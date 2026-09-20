@@ -11,7 +11,8 @@
           "prioritize_undelivered": "Undelivered packages first",
           "max_shipments": "Maximum number of packages",
           "stale_shipment_day_limit": "Days until undelivered packages are hidden",
-          "completed_shipment_day_shown": "Days until delivered packages are hidden"
+          "completed_shipment_day_shown": "Days until delivered packages are hidden",
+          "include_pickup_details": "Pickup point and code"
         },
         "data_description": {
           "username": "The email address you log in to OmaPosti with. The sensor is named after it.",
@@ -20,7 +21,8 @@
           "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
           "max_shipments": "How many packages the sensor lists.",
           "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
-          "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered."
+          "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered.",
+          "include_pickup_details": "Add the pickup point and pickup code to package data. Off by default as this is sensitive data."
         }
       },
       "reauth_confirm": {
@@ -39,7 +41,8 @@
           "prioritize_undelivered": "Undelivered packages first",
           "max_shipments": "Maximum number of packages",
           "stale_shipment_day_limit": "Days until undelivered packages are hidden",
-          "completed_shipment_day_shown": "Days until delivered packages are hidden"
+          "completed_shipment_day_shown": "Days until delivered packages are hidden",
+          "include_pickup_details": "Pickup point and code"
         },
         "data_description": {
           "password": "Leave empty to keep the saved password.",
@@ -47,7 +50,8 @@
           "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
           "max_shipments": "How many packages the sensor lists.",
           "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
-          "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered."
+          "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered.",
+          "include_pickup_details": "Add the pickup point and pickup code to package data."
         }
       }
     },
@@ -66,6 +70,32 @@
       "options": {
         "fi": "Suomi",
         "en": "English"
+      }
+    }
+  },
+  "entity": {
+    "event": {
+      "package": {
+        "name": "Package",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_package": "New package",
+              "moved": "Moved",
+              "ready_for_pickup": "Ready for pickup",
+              "delivered": "Delivered",
+              "returned": "Returned to sender"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "on_the_way": {
+        "name": "Packages on the way"
+      },
+      "ready_for_pickup": {
+        "name": "Packages ready for pickup"
       }
     }
   }
