@@ -23,6 +23,7 @@ FORM = {
     "max_shipments": 5.0,
     "stale_shipment_day_limit": 15.0,
     "completed_shipment_day_shown": 3.0,
+    "include_pickup_details": False,
 }
 
 
@@ -102,6 +103,7 @@ async def test_changing_settings_keeps_the_password(
             "max_shipments": 10.0,
             "stale_shipment_day_limit": 30.0,
             "completed_shipment_day_shown": 1.0,
+            "include_pickup_details": False,
         },
     )
     await hass.async_block_till_done()
@@ -115,6 +117,7 @@ async def test_changing_settings_keeps_the_password(
         "max_shipments": 10,
         "stale_shipment_day_limit": 30,
         "completed_shipment_day_shown": 1,
+        "include_pickup_details": False,
     }
 
 
@@ -131,6 +134,7 @@ async def test_changing_the_password(hass: HomeAssistant, omaposti: AiohttpClien
             "max_shipments": 5.0,
             "stale_shipment_day_limit": 15.0,
             "completed_shipment_day_shown": 3.0,
+            "include_pickup_details": False,
         },
     )
     await hass.async_block_till_done()

@@ -11,7 +11,8 @@
           "prioritize_undelivered": "Toimittamattomat paketit ensin",
           "max_shipments": "Pakettien enimmäismäärä",
           "stale_shipment_day_limit": "Päiviä, kunnes toimittamaton paketti piilotetaan",
-          "completed_shipment_day_shown": "Päiviä, kunnes toimitettu paketti piilotetaan"
+          "completed_shipment_day_shown": "Päiviä, kunnes toimitettu paketti piilotetaan",
+          "include_pickup_details": "Noutopiste ja koodi"
         },
         "data_description": {
           "username": "Sähköpostiosoite, jolla kirjaudut OmaPostiin. Sensori nimetään sen mukaan.",
@@ -20,7 +21,8 @@
           "prioritize_undelivered": "Kun paketteja on enemmän kuin enimmäismäärä, toimittamattomat näytetään ennen toimitettuja.",
           "max_shipments": "Kuinka monta pakettia sensori listaa.",
           "stale_shipment_day_limit": "Lasketaan paketin viimeisimmästä tapahtumasta. Jotkin paketit jäävät jakeluun pysyvästi.",
-          "completed_shipment_day_shown": "Lasketaan toimituksesta. Lähettäjälle palautetut paketit lasketaan toimitetuiksi."
+          "completed_shipment_day_shown": "Lasketaan toimituksesta. Lähettäjälle palautetut paketit lasketaan toimitetuiksi.",
+          "include_pickup_details": "Lisää pakettien tietoihin noutopisteen ja automaatin avauskoodi. Oletuksena pois päältä, koska tieto on arkaluontoista."
         }
       },
       "reauth_confirm": {
@@ -39,7 +41,8 @@
           "prioritize_undelivered": "Toimittamattomat paketit ensin",
           "max_shipments": "Pakettien enimmäismäärä",
           "stale_shipment_day_limit": "Päiviä, kunnes toimittamaton paketti piilotetaan",
-          "completed_shipment_day_shown": "Päiviä, kunnes toimitettu paketti piilotetaan"
+          "completed_shipment_day_shown": "Päiviä, kunnes toimitettu paketti piilotetaan",
+          "include_pickup_details": "Noutopiste ja koodi"
         },
         "data_description": {
           "password": "Jätä tyhjäksi, niin tallennettu salasana säilyy.",
@@ -47,7 +50,8 @@
           "prioritize_undelivered": "Kun paketteja on enemmän kuin enimmäismäärä, toimittamattomat näytetään ennen toimitettuja.",
           "max_shipments": "Kuinka monta pakettia sensori listaa.",
           "stale_shipment_day_limit": "Lasketaan paketin viimeisimmästä tapahtumasta. Jotkin paketit jäävät jakeluun pysyvästi.",
-          "completed_shipment_day_shown": "Lasketaan toimituksesta. Lähettäjälle palautetut paketit lasketaan toimitetuiksi."
+          "completed_shipment_day_shown": "Lasketaan toimituksesta. Lähettäjälle palautetut paketit lasketaan toimitetuiksi.",
+          "include_pickup_details": "Lisää pakettien tietoihin noutopisteen ja automaatin avauskoodi."
         }
       }
     },
@@ -66,6 +70,32 @@
       "options": {
         "fi": "Suomi",
         "en": "English"
+      }
+    }
+  },
+  "entity": {
+    "event": {
+      "package": {
+        "name": "Paketti",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_package": "Uusi paketti",
+              "moved": "Siirtyi",
+              "ready_for_pickup": "Noudettavissa",
+              "delivered": "Toimitettu",
+              "returned": "Palautettu lähettäjälle"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "on_the_way": {
+        "name": "Paketteja matkalla"
+      },
+      "ready_for_pickup": {
+        "name": "Paketteja noudettavissa"
       }
     }
   }

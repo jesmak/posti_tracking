@@ -62,6 +62,7 @@ menu on the integration page; an empty password field keeps the saved password.
 | Maximum number of packages                 | number  | How many packages the sensor lists                                               | 5                         |
 | Days until undelivered packages are hidden | days    | Counted from the latest event. Some packages stay in delivery for good           | 15                        |
 | Days until delivered packages are hidden   | days    | Counted from the delivery. Returned packages count as delivered                  | 3                         |
+| Pickup point and code                      | boolean | Adds the pickup point and its code to the packages. The code opens the locker    | off                       |
 
 ## Sensor
 
@@ -70,18 +71,24 @@ sensor is named after the account, for example `sensor.posti_matti_meikalainen_e
 
 The `packages` attribute lists the packages, and each package has:
 
-| Key                                         | Description                                                 |
-| ------------------------------------------- | ----------------------------------------------------------- |
-| `shipment_number`                           | The tracking number, or Posti's shipment number without one |
-| `status`                                    | The package's status, below                                 |
-| `raw_status`                                | Posti's shipment phase, such as `READY_FOR_PICKUP`          |
-| `origin`, `origin_city`                     | The sender and its city                                     |
-| `destination`, `destination_city`           | The pickup point, or the receiver without one, and the city |
-| `shipment_date`                             | When Posti received the shipment's details                  |
-| `latest_event`                              | The latest event, in the chosen language when Posti has it  |
-| `latest_event_city`, `latest_event_country` | Where the latest event happened                             |
-| `latest_event_date`                         | When the package last changed                               |
-| `source`                                    | Always `Posti`                                              |
+| Key                                         | Description                                                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| `shipment_number`                           | The tracking number, or Posti's shipment number without one                    |
+| `status`                                    | The package's status, below                                                    |
+| `raw_status`                                | Posti's shipment phase, such as `READY_FOR_PICKUP`                             |
+| `origin`, `origin_city`                     | The sender and its city                                                        |
+| `destination`, `destination_city`           | The pickup point, or the receiver without one, and the city                    |
+| `shipment_date`                             | When Posti received the shipment's details                                     |
+| `latest_event`                              | The latest event, in the chosen language when Posti has it                     |
+| `latest_event_city`, `latest_event_country` | Where the latest event happened                                                |
+| `latest_event_date`                         | When the package last changed                                                  |
+| `estimated_delivery`                        | When the package is expected, when the service says                            |
+| `pickup_deadline`                           | How long it is kept at the pickup point, which Posti never tells: always empty |
+| `weight`                                    | The package's weight in kilograms                                              |
+| `package_count`                             | How many parcels the shipment has                                              |
+| `pickup_point`                              | The pickup point, with **Pickup point and code** on                            |
+| `pickup_code`                               | The code that opens the locker, with the same setting on                       |
+| `source`                                    | Always `Posti`                                                                 |
 
 | `status` | Meaning                | Posti's phase        |
 | -------- | ---------------------- | -------------------- |
@@ -94,8 +101,54 @@ The `packages` attribute lists the packages, and each package has:
 | `6`      | Returned to the sender | `RETURNED_TO_SENDER` |
 | `7`      | Unknown                | any other phase      |
 
+Posti leaves `pickup_deadline` empty; it is in the list so that packages from both services look the same.
+
+The pickup point and its code are left out unless the account's **Pickup point and code** setting is turned on,
+because the code alone opens the locker and anyone who can see your dashboard can read it. Change the setting with
+**Reconfigure**.
+
 Times are ISO 8601 in UTC. Packages without events, which Posti has only been told about, aren't listed. The packages
 aren't stored in the recorder, only the state. The sensor is unavailable while Posti can't be reached.
+
+## Counts
+
+Two sensors count the packages, so a badge or an automation needs no templating:
+
+| Sensor                    | What it counts                              |
+| ------------------------- | ------------------------------------------- |
+| Packages on the way       | Everything that hasn't finished its journey |
+| Packages ready for pickup | The ones waiting at a pickup point          |
+
+## Events
+
+An event entity, **Package**, fires once for everything that happens to a package, so an automation can act on it
+without watching the packages attribute. Several packages changing in one update fire one event each.
+
+| Event type         | When it fires                                 |
+| ------------------ | --------------------------------------------- |
+| `new_package`      | A package the account hadn't seen before      |
+| `moved`            | The package moved along, or a new event of it |
+| `ready_for_pickup` | It is waiting to be picked up                 |
+| `delivered`        | It has been delivered                         |
+| `returned`         | It was returned to the sender                 |
+
+The event carries the package it happened to: `shipment_number`, `status`, `raw_status`, `origin`, `destination`,
+`destination_city`, `latest_event`, `latest_event_city`, `latest_event_date` and `source`.
+
+Nothing fires for the packages that are already there when Home Assistant starts; they have not just happened.
+
+```yaml
+automation:
+  - triggers:
+      - trigger: state
+        entity_id: event.posti_matti_meikalainen_example_com_package
+        attribute: event_type
+        to: ready_for_pickup
+    actions:
+      - action: notify.mobile_app_phone
+        data:
+          message: "{{ trigger.to_state.attributes.shipment_number }} is ready for pickup"
+```
 
 ## Upgrading from 1.x
 
@@ -124,7 +177,9 @@ python3.14 -m venv .venv
 | `api.py`                       | The shipments query and keeping the tokens valid          |
 | `coordinator.py`               | Fetching the packages every 10 minutes                    |
 | `shipments.py`                 | Turning shipments into the sensor's packages              |
-| `sensor.py`                    | The sensor                                                |
+| `sensor.py`                    | The sensors: the account's own, and the counts            |
+| `event.py`                     | The event entity, one event per package change            |
+| `changes.py`                   | What happened to the packages between two updates         |
 | `translations/<language>.json` | Home Assistant UI texts                                   |
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/jesmak/posti_tracking.svg?style=for-the-badge

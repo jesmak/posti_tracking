@@ -52,6 +52,7 @@ ENTRY_DATA = {
     "max_shipments": 5,
     "stale_shipment_day_limit": 15,
     "completed_shipment_day_shown": 3,
+    "include_pickup_details": False,
     "tokens": VALID_TOKENS,
 }
 

@@ -28,6 +28,7 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    CONF_INCLUDE_PICKUP_DETAILS,
     CONF_LANGUAGE,
     CONF_MAX_SHIPMENTS,
     CONF_PASSWORD,
@@ -36,6 +37,7 @@ from .const import (
     CONF_TOKENS,
     CONF_USERNAME,
     DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    DEFAULT_INCLUDE_PICKUP_DETAILS,
     DEFAULT_MAX_SHIPMENTS,
     DEFAULT_PRIORITIZE_UNDELIVERED,
     DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
@@ -58,6 +60,7 @@ SETTING_FIELDS = {
     ),
     vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT): DAYS_SELECTOR,
     vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN): DAYS_SELECTOR,
+    vol.Required(CONF_INCLUDE_PICKUP_DETAILS): BooleanSelector(),
 }
 
 USER_SCHEMA = vol.Schema(
@@ -76,7 +79,11 @@ REAUTH_SCHEMA = vol.Schema({vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR})
 
 def clean_settings(user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Submitted settings, normalised for storing."""
-    data = {key: user_input[key] for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED) if key in user_input}
+    data = {
+        key: user_input[key]
+        for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED, CONF_INCLUDE_PICKUP_DETAILS)
+        if key in user_input
+    }
     for key in (CONF_MAX_SHIPMENTS, CONF_STALE_SHIPMENT_DAY_LIMIT, CONF_COMPLETED_SHIPMENT_DAYS_SHOWN):
         if key in user_input:
             data[key] = int(user_input[key])
@@ -130,6 +137,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             CONF_MAX_SHIPMENTS: DEFAULT_MAX_SHIPMENTS,
             CONF_STALE_SHIPMENT_DAY_LIMIT: DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
             CONF_COMPLETED_SHIPMENT_DAYS_SHOWN: DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+            CONF_INCLUDE_PICKUP_DETAILS: DEFAULT_INCLUDE_PICKUP_DETAILS,
         }
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
