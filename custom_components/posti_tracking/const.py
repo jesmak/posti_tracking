@@ -7,6 +7,9 @@ DOMAIN: Final = "posti_tracking"
 
 ATTRIBUTION: Final = "Data provided by Posti Group Oyj"
 
+# The carrier's own page for a package, given with each package so that package-tracker-card can open it.
+TRACKING_URL: Final = "https://www.posti.fi/fi/seuranta#/lahetys/{number}"
+
 AUTH_SERVICE_URL: Final = "https://auth-service.posti.fi/api/v1"
 UAS_URL: Final = "https://todentaminen.posti.fi/uas"
 GRAPH_API_URL: Final = "https://oma.posti.fi/graphql/v2"

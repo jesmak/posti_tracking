@@ -75,6 +75,7 @@ def test_package_attributes() -> None:
         "pickup_point": None,
         "pickup_code": None,
         "source": "Posti",
+        "tracking_url": "https://www.posti.fi/fi/seuranta#/lahetys/JJFI0001",
     }
     assert build_packages(SHIPMENTS, SETTINGS, "en", NOW).packages[2]["latest_event"] == "Ready for pickup"
 
