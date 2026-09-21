@@ -1,7 +1,7 @@
 """Turning the shipments of an account into the sensor's package list.
 
-The packages have the same attributes and statuses as in Matkahuolto package
-tracking, so package-tracker-card can list packages from both.
+The packages are in the format package-tracker-card reads, which other tracking
+integrations write too, so the card can list them together.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 from .const import (
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
@@ -22,6 +23,7 @@ from .const import (
     DEFAULT_MAX_SHIPMENTS,
     DEFAULT_PRIORITIZE_UNDELIVERED,
     DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
+    TRACKING_URL,
 )
 
 # Package statuses, as package-tracker-card shows them.
@@ -131,13 +133,14 @@ def package(
     location = event.get("eventLocation") if isinstance(event.get("eventLocation"), Mapping) else {}
     tracking_numbers = shipment.get("trackingNumbers") or []
     point = shipment.get("pickupPoint") if isinstance(shipment.get("pickupPoint"), Mapping) else {}
+    shipment_number = (tracking_numbers[0] if tracking_numbers else None) or shipment.get("shipmentNumber")
     return {
         "origin": party_name(parties, "CONSIGNOR"),
         "origin_city": city(shipment.get("departure")),
         # The pickup point when there is one, otherwise the receiver.
         "destination": party_name(parties, "DELIVERY") or party_name(parties, "CONSIGNEE"),
         "destination_city": city(shipment.get("destination")),
-        "shipment_number": (tracking_numbers[0] if tracking_numbers else None) or shipment.get("shipmentNumber"),
+        "shipment_number": shipment_number,
         "shipment_date": shipment.get("savedDateTime"),
         "status": status,
         "raw_status": shipment.get("shipmentPhase"),
@@ -146,13 +149,14 @@ def package(
         "latest_event_country": location.get("country"),
         "latest_event_date": event.get("timestamp"),
         "estimated_delivery": shipment.get("estimatedDeliveryTime"),
-        # Posti doesn't tell how long a package is kept; Matkahuolto does.
+        # Posti doesn't tell how long a package is kept.
         "pickup_deadline": None,
         "weight": number(shipment.get("grossWeight")),
         "package_count": whole_number(shipment.get("packageQuantity")),
         "pickup_point": pickup_point(point) if settings.include_pickup_details else None,
         "pickup_code": pickup_code(point) if settings.include_pickup_details else None,
         "source": "Posti",
+        "tracking_url": tracking_url(shipment_number),
     }
 
 
@@ -218,3 +222,8 @@ def parse_time(value: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
+
+
+def tracking_url(shipment_number: Any) -> str | None:
+    """The carrier's own tracking page for the package."""
+    return TRACKING_URL.format(number=quote(str(shipment_number), safe="")) if shipment_number else None

@@ -18,9 +18,8 @@ A custom component that lists the coming and recently delivered packages of an [
 account. There's no need to add packages by hand: the list comes from the packages in your account, and it's updated
 every 10 minutes.
 
-The sensor's attributes list the packages in the same format as [Matkahuolto package
-tracking](https://github.com/jesmak/matkahuolto_tracking), so
-[package-tracker-card](https://github.com/jesmak/package-tracker-card) can show packages from both.
+The sensor lists the packages in the format [package-tracker-card](https://github.com/jesmak/package-tracker-card)
+reads, so the card can show them together with packages from other tracking integrations.
 
 ## Installation
 
@@ -89,6 +88,7 @@ The `packages` attribute lists the packages, and each package has:
 | `pickup_point`                              | The pickup point, with **Pickup point and code** on                            |
 | `pickup_code`                               | The code that opens the locker, with the same setting on                       |
 | `source`                                    | Always `Posti`                                                                 |
+| `tracking_url`                              | The package's page on posti.fi                                                 |
 
 | `status` | Meaning                | Posti's phase        |
 | -------- | ---------------------- | -------------------- |
@@ -101,7 +101,7 @@ The `packages` attribute lists the packages, and each package has:
 | `6`      | Returned to the sender | `RETURNED_TO_SENDER` |
 | `7`      | Unknown                | any other phase      |
 
-Posti leaves `pickup_deadline` empty; it is in the list so that packages from both services look the same.
+Posti leaves `pickup_deadline` empty; it is in the list so that packages look the same as other integrations' do.
 
 The pickup point and its code are left out unless the account's **Pickup point and code** setting is turned on,
 because the code alone opens the locker and anyone who can see your dashboard can read it. Change the setting with
