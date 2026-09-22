@@ -2,9 +2,11 @@
 
 Home Assistant integration that follows the packages of an OmaPosti account.
 
-[![GitHub Release][releases-shield]][releases]
-[![License][license-shield]](LICENSE)
-[![GitHub Activity][commits-shield]][commits]
+[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases]
+
+[![HACS][hacs-shield]][hacs] [![Home Assistant][home-assistant-shield]][home-assistant] [![License][license-shield]](LICENSE)
+
+![Project Maintenance][maintenance-shield] [![GitHub Activity][commits-shield]][commits] [![Open bugs][bugs-shield]][bugs] [![Open enhancements][enhancements-shield]][enhancements]
 
 ## Support
 
@@ -182,8 +184,18 @@ python3.14 -m venv .venv
 | `changes.py`                   | What happened to the packages between two updates         |
 | `translations/<language>.json` | Home Assistant UI texts                                   |
 
+[releases-shield]: https://img.shields.io/github/release/jesmak/posti_tracking.svg?style=for-the-badge
+[release-date-shield]: https://img.shields.io/github/release-date/jesmak/posti_tracking?style=for-the-badge
+[releases]: https://github.com/jesmak/posti_tracking/releases
+[hacs-shield]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[hacs]: https://hacs.xyz/docs/faq/custom_repositories/
+[home-assistant-shield]: https://img.shields.io/badge/Home%20Assistant-UI%20setup-green.svg?style=for-the-badge
+[home-assistant]: https://www.home-assistant.io/
+[license-shield]: https://img.shields.io/github/license/jesmak/posti_tracking.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
 [commits-shield]: https://img.shields.io/github/commit-activity/y/jesmak/posti_tracking.svg?style=for-the-badge
 [commits]: https://github.com/jesmak/posti_tracking/commits/master
-[license-shield]: https://img.shields.io/github/license/jesmak/posti_tracking.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/jesmak/posti_tracking.svg?style=for-the-badge
-[releases]: https://github.com/jesmak/posti_tracking/releases
+[bugs-shield]: https://img.shields.io/github/issues/jesmak/posti_tracking/bug?style=for-the-badge&label=bugs&color=red
+[bugs]: https://github.com/jesmak/posti_tracking/labels/bug
+[enhancements-shield]: https://img.shields.io/github/issues/jesmak/posti_tracking/enhancement?style=for-the-badge&label=enhancements&color=blue
+[enhancements]: https://github.com/jesmak/posti_tracking/labels/enhancement
