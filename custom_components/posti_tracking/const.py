@@ -92,6 +92,8 @@ fragment ShipmentFields on shipment {
     type
     lockerAddress
     lockerCode
+    lockerID
+    showLockerID
     pupCode
     availabilityTime
     location {

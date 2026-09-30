@@ -116,6 +116,8 @@ def with_details(**changes: Any) -> dict[str, Any]:
             "type": "LOCKER",
             "lockerAddress": "K-Market Keskusta",
             "lockerCode": "123456",
+            "lockerID": "17",
+            "showLockerID": True,
             "pupCode": "PUP-1",
             "availabilityTime": "24h",
             "location": {"street1": "Kauppakatu 1", "postCode": "53100", "city": "LAPPEENRANTA"},
@@ -143,6 +145,7 @@ def test_the_pickup_point_and_its_code_when_asked_for() -> None:
     [package] = build_packages([with_details()], settings, "fi", NOW).packages
     assert package["pickup_point"] == {
         "name": "K-Market Keskusta",
+        "compartment": "17",
         "street": "Kauppakatu 1",
         "postal_code": "53100",
         "city": "LAPPEENRANTA",
@@ -150,6 +153,14 @@ def test_the_pickup_point_and_its_code_when_asked_for() -> None:
         "available": "24h",
     }
     assert package["pickup_code"] == "123456"
+
+
+def test_a_compartment_posti_does_not_show_is_left_out() -> None:
+    settings = replace(SETTINGS, include_pickup_details=True)
+    counter = {"lockerID": "B0001", "showLockerID": None, "pupCode": "PUP-1", "location": {"city": "LAPPEENRANTA"}}
+    [package] = build_packages([{**with_details(), "pickupPoint": counter}], settings, "fi", NOW).packages
+    assert package["pickup_point"]["compartment"] is None
+    assert package["pickup_code"] == "PUP-1"
 
 
 def test_a_package_without_the_extra_fields() -> None:

@@ -165,6 +165,9 @@ def pickup_point(point: Mapping[str, Any]) -> dict[str, Any] | None:
     location = point.get("location") if isinstance(point.get("location"), Mapping) else {}
     found = {
         "name": point.get("lockerAddress"),
+        # The door the package is behind, at lockers with a keypad on every door. Posti flags when it is worth showing:
+        # the ID of a package kept at a counter isn't.
+        "compartment": point.get("lockerID") if point.get("showLockerID") is True else None,
         "street": location.get("street1"),
         "postal_code": location.get("postCode"),
         "city": location.get("city"),

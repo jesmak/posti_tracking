@@ -88,6 +88,7 @@ The `packages` attribute lists the packages, and each package has:
 | `weight`                                    | The package's weight in kilograms                                              |
 | `package_count`                             | How many parcels the shipment has                                              |
 | `pickup_point`                              | The pickup point, with **Pickup point and code** on                            |
+| `pickup_point.compartment`                  | The locker door the package is behind, at lockers with a keypad on every door  |
 | `pickup_code`                               | The code that opens the locker, with the same setting on                       |
 | `source`                                    | Always `Posti`                                                                 |
 | `tracking_url`                              | The package's page on posti.fi                                                 |
