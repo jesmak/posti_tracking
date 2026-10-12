@@ -2,11 +2,26 @@
   "config": {
     "step": {
       "user": {
-        "title": "Posti package tracking",
-        "description": "The coming and recently delivered packages of your OmaPosti account. Posti package tracking logs in like the OmaPosti app, with your user name and password.",
+        "title": "OmaPosti",
+        "description": "Log in to OmaPosti. Authentication happens in your own browser with your bank or Mobiilivarmenne. Posti doesn't allow logging in with a user name and password.",
         "data": {
-          "username": "User name",
-          "password": "Password",
+          "method": "Authentication method"
+        }
+      },
+      "authenticate": {
+        "title": "OmaPosti",
+        "description": "1. Open [the authentication page]({url}) and authenticate.\n2. When the authentication is done, your browser ends up on a page that will most likely show an error. That is the expected result and not a problem. Copy the full address of the page you ended up on from the browser's address bar and paste it here.\n\nNothing is sent to Home Assistant other than the address you paste. You authenticate only in your own browser, and neither Home Assistant nor this integration has any visibility into the details you enter.\n\nAfter the login, Home Assistant keeps a device key that keeps you logged in. [What that means for security]({security_url}).",
+        "data": {
+          "address": "Address"
+        },
+        "data_description": {
+          "address": "The address your browser ended up on. It should look like {return_address}"
+        }
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Logged in as {account}.",
+        "data": {
           "language": "Language",
           "prioritize_undelivered": "Undelivered packages first",
           "max_shipments": "Maximum number of packages",
@@ -15,8 +30,6 @@
           "include_pickup_details": "Pickup point and code"
         },
         "data_description": {
-          "username": "The email address you log in to OmaPosti with. The sensor is named after it.",
-          "password": "Saved in Home Assistant, for logging in again when the saved login expires.",
           "language": "Language of the package event descriptions.",
           "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
           "max_shipments": "How many packages the sensor lists.",
@@ -26,17 +39,13 @@
         }
       },
       "reauth_confirm": {
-        "title": "Password for {username}",
-        "description": "Posti no longer accepts the saved password. Enter the password of your OmaPosti account.",
-        "data": {
-          "password": "Password"
-        }
+        "title": "Log in again as {username}",
+        "description": "Posti does not accept the saved login. Log in again with the same OmaPosti account. In the next steps you authenticate in your own browser with either your bank or Mobiilivarmenne."
       },
       "reconfigure": {
         "title": "Posti package tracking",
         "description": "Settings of {username}.",
         "data": {
-          "password": "Password",
           "language": "Language",
           "prioritize_undelivered": "Undelivered packages first",
           "max_shipments": "Maximum number of packages",
@@ -45,7 +54,6 @@
           "include_pickup_details": "Pickup point and code"
         },
         "data_description": {
-          "password": "Leave empty to keep the saved password.",
           "language": "Language of the package event descriptions.",
           "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
           "max_shipments": "How many packages the sensor lists.",
@@ -56,13 +64,18 @@
       }
     },
     "error": {
-      "invalid_auth": "Posti didn't accept the user name and password.",
-      "cannot_connect": "Posti couldn't be reached. Try again in a moment."
+      "invalid_auth": "Posti didn't accept the authentication. Choose a method and try again.",
+      "cannot_connect": "Posti couldn't be reached. Try again in a moment.",
+      "invalid_address": "The address isn't in the right format. After authenticating, copy the full address from the address bar.",
+      "device_failed": "Posti didn't accept Home Assistant as a device. Log in again.",
+      "no_account": "Posti's login didn't say which account it is. Log in again."
     },
     "abort": {
       "already_configured": "This account has already been added.",
-      "reauth_successful": "The password works and has been saved.",
-      "reconfigure_successful": "Settings saved."
+      "cannot_connect": "Posti couldn't be reached. Try again in a moment.",
+      "reauth_successful": "Logged in again. The packages are updated in a moment.",
+      "reconfigure_successful": "Settings saved.",
+      "wrong_account": "The login was made with a different OmaPosti account than the current configuration. Log in with the same account, or add the other account separately."
     }
   },
   "selector": {
@@ -70,6 +83,22 @@
       "options": {
         "fi": "Suomi",
         "en": "English"
+      }
+    },
+    "method": {
+      "options": {
+        "mobileid": "Mobiilivarmenne",
+        "aktia": "Aktia",
+        "danske": "Danske Bank",
+        "nordea": "Nordea",
+        "omasp": "Oma Säästöpankki",
+        "op": "OP",
+        "pop": "POP Pankki",
+        "spankki": "S-Pankki",
+        "saastopankki": "Säästöpankki",
+        "alandsbanken": "Ålandsbanken",
+        "htid": "hightrust.id",
+        "hst": "ID card"
       }
     }
   },

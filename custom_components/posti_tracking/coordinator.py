@@ -12,7 +12,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import PostiClient
-from .const import CONF_LANGUAGE, CONF_PASSWORD, CONF_TOKENS, CONF_USERNAME, DOMAIN, UPDATE_INTERVAL
+from .const import CONF_DEVICE, CONF_LANGUAGE, CONF_TOKENS, DOMAIN, UPDATE_INTERVAL
+from .device import Device
 from .exceptions import PostiAuthError, PostiError
 from .shipments import Packages, PackageSettings, build_packages
 
@@ -35,16 +36,12 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
         self.settings = PackageSettings.from_data(entry.data)
         self.language = entry.data[CONF_LANGUAGE]
         self.client = PostiClient(
-            hass,
-            entry.data[CONF_USERNAME],
-            entry.data[CONF_PASSWORD],
-            entry.data.get(CONF_TOKENS),
-            self._save_tokens,
+            hass, Device.from_data(entry.data[CONF_DEVICE]), entry.data[CONF_TOKENS], self._save_tokens
         )
 
     @callback
     def _save_tokens(self, tokens: dict[str, Any]) -> None:
-        """Keeps renewed tokens, so that the next start doesn't need a new login.
+        """Keeps renewed tokens, so that the next start can use them.
 
         The entry has no update listener, so saving the tokens doesn't reload the integration.
         """

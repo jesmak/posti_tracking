@@ -23,13 +23,13 @@ NOW = datetime(2026, 9, 16, 9, 0, tzinfo=UTC)
 TOKEN_URL = f"{AUTH_SERVICE_URL}/token_v2"
 
 
-def jwt(expires: datetime) -> str:
-    """A JSON web token that expires at the given time. Only its expiry is ever read."""
+def jwt(expires: datetime, **claims: Any) -> str:
+    """A JSON web token that expires at the given time, with any other claims. It is never verified."""
 
     def part(data: dict[str, Any]) -> str:
         return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
 
-    return f"{part({'alg': 'RS256'})}.{part({'exp': int(expires.timestamp())})}.signature"
+    return f"{part({'alg': 'RS256'})}.{part({'exp': int(expires.timestamp())} | claims)}.signature"
 
 
 def tokens(expires: datetime, suffix: str = "") -> dict[str, Any]:
@@ -44,17 +44,19 @@ def tokens(expires: datetime, suffix: str = "") -> dict[str, Any]:
 VALID_TOKENS = tokens(datetime(2100, 1, 1, tzinfo=UTC))
 EXPIRED_TOKENS = tokens(datetime(2000, 1, 1, tzinfo=UTC))
 
-ENTRY_DATA = {
-    "username": USERNAME,
-    "password": PASSWORD,
+SETTINGS = {
     "language": "fi",
     "prioritize_undelivered": True,
     "max_shipments": 5,
     "stale_shipment_day_limit": 15,
     "completed_shipment_day_shown": 3,
     "include_pickup_details": False,
-    "tokens": VALID_TOKENS,
 }
+# The device is never used for real: the tests replace the renewal that would use its key.
+DEVICE_DATA = {"device_id": "device-1", "private_key": "private key", "salt": "c2FsdA==", "subject": "account-1"}
+ENTRY_DATA = {"username": USERNAME, **SETTINGS, "device": DEVICE_DATA, "tokens": VALID_TOKENS}
+# An entry of 2.x and earlier, which logged in with a password.
+PASSWORD_ENTRY_DATA = {"username": USERNAME, "password": PASSWORD, **SETTINGS, "tokens": VALID_TOKENS}
 
 
 @pytest.fixture(autouse=True)
@@ -132,10 +134,8 @@ def omaposti(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
 
 
 @pytest.fixture
-def login() -> Iterator[Any]:
-    """The login, replaced: it returns valid tokens unless a test tells it otherwise."""
-    with (
-        patch("custom_components.posti_tracking.api.log_in", return_value=VALID_TOKENS) as api_login,
-        patch("custom_components.posti_tracking.config_flow.log_in", new=api_login),
-    ):
-        yield api_login
+def renewal() -> Iterator[Any]:
+    """Renewing the tokens with the device key, replaced: it gives valid tokens unless a test tells it otherwise."""
+    renewed = {key: VALID_TOKENS[key] for key in ("id_token", "access_token", "role_tokens")}
+    with patch("custom_components.posti_tracking.api.refresh", return_value=renewed) as refresh:
+        yield refresh

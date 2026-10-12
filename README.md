@@ -23,6 +23,10 @@ every 10 minutes.
 The sensor lists the packages in the format [package-tracker-card](https://github.com/jesmak/package-tracker-card)
 reads, so the card can show them together with packages from other tracking integrations.
 
+This is an unofficial integration. It isn't affiliated with or endorsed by Posti. Each user logs in with their own
+OmaPosti account, and using it may be against Posti's terms of service, so use it at your own risk. It will be
+withdrawn if Posti objects.
+
 ## Installation
 
 ### With HACS
@@ -30,7 +34,7 @@ reads, so the card can show them together with packages from other tracking inte
 1. Add this repository to HACS custom repositories with type **Integration**
 2. Search for Posti package tracking in HACS and download it
 3. Restart Home Assistant
-4. Add the integration in Settings › Devices & services, with your OmaPosti user name and password
+4. Add the integration in Settings › Devices & services and log in (see [Logging in](#logging-in))
 
 ### Manual
 
@@ -38,26 +42,63 @@ reads, so the card can show them together with packages from other tracking inte
 2. Copy the `custom_components/posti_tracking` folder to your Home Assistant installation's
    `config/custom_components` folder
 3. Restart Home Assistant
-4. Add the integration in Settings › Devices & services, with your OmaPosti user name and password
+4. Add the integration in Settings › Devices & services and log in (see [Logging in](#logging-in))
 
 ## Logging in
 
-OmaPosti has no public API. The integration logs in the way the OmaPosti Android app does, with your user name and
-password, and saves the tokens it gets. The tokens are renewed shortly before they expire; when that doesn't work, it
-logs in again with the saved password. If Posti no longer accepts the password, Home Assistant asks for it on the
-integration page.
+OmaPosti has no public API, and Posti no longer accepts a user name and password. The integration logs in the way
+the OmaPosti Android app does, with strong authentication, and then registers itself as one of your account's
+trusted devices, as the app does on a phone.
+
+1. Choose how you authenticate. The list is Posti's own, so it has Mobiilivarmenne, the banks, the ID card and
+   whatever else Posti offers at the time.
+2. Open the link the integration shows and authenticate in your own browser, as you would on posti.fi.
+3. Your browser ends up on a page on `todentaminen.posti.fi` that may show an error. That is expected. Copy the full
+   address from the address bar and paste it into the integration.
+
+The authentication happens entirely in your browser. Your bank credentials never reach Home Assistant or the
+integration. The only thing sent to Home Assistant is the address you paste.
+
+After that the integration never needs your bank again. It keeps the login alive with its own device key, the way the
+app does, also over restarts and longer breaks. You need to log in again only if the device is removed from your
+account, and then Home Assistant asks for it on the integration page.
 
 Because it imitates the app, a change in Posti's login can stop the integration until it is updated.
 
+## Security
+
+Read this before adding an account.
+
+To stay logged in, the integration stores a private key of its own in Home Assistant, together with the latest tokens.
+That key lets it get new tokens for your OmaPosti account for as long as the device stays trusted, without your bank
+and without asking you. On a phone, the OmaPosti app keeps its key behind the phone's lock. Home Assistant has no
+such place, so the key sits in Home Assistant's configuration storage like any other integration's credentials, and
+in every backup of it.
+
+So your OmaPosti account is only as safe as your Home Assistant installation. Anyone who can read its configuration
+or a backup of it can read your packages and the details in your account, such as your name and address, until the
+device is removed.
+
+### Removing the integration from your account
+
+The integration shows in your account's trusted devices as **Home Assistant**.
+
+- **Deleting the account in Home Assistant** removes that device from your account as well.
+- **Otherwise, remove it in the OmaPosti app**, under More › Settings › Security settings › Manage trusted devices
+  (in Finnish Lisää › Asetukset › Turva-asetukset › Luotettujen laitteiden hallinta). Do this if Home Assistant
+  couldn't reach Posti when you deleted the account (it then logs a warning), if Home Assistant or a backup of it is
+  lost or stolen, or if you stop using Home Assistant without deleting the account first.
+
+Once the device is removed, the key stored in Home Assistant and its backups is useless. A token it already got keeps
+working until it expires, which is within an hour.
+
 ## Settings
 
-Each account is added separately. To change its settings or password later, choose **Reconfigure** from the account's
-menu on the integration page; an empty password field keeps the saved password.
+Each account is added separately. To change its settings later, choose **Reconfigure** from the account's menu on the
+integration page.
 
 | Name                                       | Type    | Description                                                                      | Default                   |
 | ------------------------------------------ | ------- | -------------------------------------------------------------------------------- | ------------------------- |
-| User name                                  | string  | The email address you log in to OmaPosti with. The sensor is named after it      |                           |
-| Password                                   | string  | Your OmaPosti password, saved in Home Assistant                                  |                           |
 | Language                                   | enum    | Language of the package event descriptions: `fi` or `en`                         | Home Assistant's language |
 | Undelivered packages first                 | boolean | When there are more packages than the maximum, undelivered ones are listed first | on                        |
 | Maximum number of packages                 | number  | How many packages the sensor lists                                               | 5                         |
@@ -153,9 +194,13 @@ automation:
           message: "{{ trigger.to_state.attributes.shipment_number }} is ready for pickup"
 ```
 
-## Upgrading from 1.x
+## Upgrading from 2.x or 1.x
 
-Nothing needs to be done: the account, its saved login, the sensor and its attributes carry over.
+Posti no longer accepts passwords, so every account has to log in once with strong authentication. After the upgrade
+Home Assistant asks for it in Settings › Repairs and on the integration page. Open it there and follow
+[Logging in](#logging-in). The saved password is deleted at the upgrade.
+
+The sensors, the event entity, their entity IDs and the settings all carry over.
 
 ## Data
 
@@ -174,10 +219,11 @@ python3.14 -m venv .venv
 
 | Path                           | What it contains                                          |
 | ------------------------------ | --------------------------------------------------------- |
-| `__init__.py`                  | Setup, and giving entries of earlier versions a unique id |
-| `config_flow.py`               | Adding an account, a new password and changing settings   |
-| `login.py`                     | Logging in like the OmaPosti app                          |
-| `api.py`                       | The shipments query and keeping the tokens valid          |
+| `__init__.py`                  | Setup, removal, and moving entries of earlier versions    |
+| `config_flow.py`               | Adding an account, logging in again and changing settings |
+| `login.py`                     | Strong authentication like the OmaPosti app               |
+| `device.py`                    | The device key, its registration and renewing the tokens  |
+| `api.py`                       | The shipments query, renewing the tokens when they expire |
 | `coordinator.py`               | Fetching the packages every 10 minutes                    |
 | `shipments.py`                 | Turning shipments into the sensor's packages              |
 | `sensor.py`                    | The sensors: the account's own, and the counts            |

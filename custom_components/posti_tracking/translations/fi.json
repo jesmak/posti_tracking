@@ -2,11 +2,26 @@
   "config": {
     "step": {
       "user": {
-        "title": "Posti paketinseuranta",
-        "description": "OmaPosti-tilisi tulevat ja äskettäin toimitetut paketit. Posti paketinseuranta kirjautuu OmaPosti-sovelluksen tapaan käyttäjätunnuksellasi ja salasanallasi.",
+        "title": "OmaPosti",
+        "description": "Kirjaudu OmaPostiin. Tunnistautuminen tapahtuu omassa selaimessasi pankkitunnuksilla tai mobiilivarmenteella. Posti ei salli kirjautumista käyttäjätunnuksella ja salasanalla.",
         "data": {
-          "username": "Käyttäjätunnus",
-          "password": "Salasana",
+          "method": "Tunnistustapa"
+        }
+      },
+      "authenticate": {
+        "title": "OmaPosti",
+        "description": "1. Avaa [tunnistussivu]({url}) ja tunnistaudu.\n2. Tunnistautumisen päätteeksi selaimesi päätyy sivulle, joka todennäköisesti näyttää virheen. Se on odotettu lopputulos, eikä ole ongelma. Kopioi sivun, jolle tunnistautumisen jälkeen päädyit, koko osoite selaimen osoiteriviltä ja liitä se tähän.\n\nHome Assistantiin ei lähetetä mitään muuta kuin liittämäsi osoite. Tunnistaudut vain omassa selaimessasi, eikä Home Assistantilla tai tällä integraatiolla ole minkäänlaista näkyvyyttä syöttämiisi tietoihin.\n\nKirjautumisen jälkeen Home Assistant säilyttää laiteavainta, joka pitää sinut kirjautuneena. [Mitä se tarkoittaa tietoturvan kannalta]({security_url}).",
+        "data": {
+          "address": "Osoite"
+        },
+        "data_description": {
+          "address": "Osoite, jolle selaimesi päätyi. Osoitteen pitäisi olla muotoa {return_address}"
+        }
+      },
+      "settings": {
+        "title": "Asetukset",
+        "description": "Kirjautuneena tilille {account}.",
+        "data": {
           "language": "Kieli",
           "prioritize_undelivered": "Toimittamattomat paketit ensin",
           "max_shipments": "Pakettien enimmäismäärä",
@@ -15,8 +30,6 @@
           "include_pickup_details": "Noutopiste ja koodi"
         },
         "data_description": {
-          "username": "Sähköpostiosoite, jolla kirjaudut OmaPostiin. Sensori nimetään sen mukaan.",
-          "password": "Tallennetaan Home Assistantiin, jotta integraatio voi kirjautua uudelleen tallennetun kirjautumisen vanhentuessa.",
           "language": "Kieli, jolla pakettien tapahtumat kuvataan.",
           "prioritize_undelivered": "Kun paketteja on enemmän kuin enimmäismäärä, toimittamattomat näytetään ennen toimitettuja.",
           "max_shipments": "Kuinka monta pakettia sensori listaa.",
@@ -26,17 +39,13 @@
         }
       },
       "reauth_confirm": {
-        "title": "Salasana tilille {username}",
-        "description": "Posti ei enää hyväksy tallennettua salasanaa. Anna OmaPosti-tilisi salasana.",
-        "data": {
-          "password": "Salasana"
-        }
+        "title": "Kirjaudu uudelleen tilille {username}",
+        "description": "Posti ei hyväksy tallennettua kirjautumista. Kirjaudu uudelleen samalla OmaPosti-tilillä. Seuraavissa vaiheissa tunnistaudut omassa selaimessasi joko pankkitunnuksilla tai mobiilivarmenteella."
       },
       "reconfigure": {
         "title": "Posti paketinseuranta",
         "description": "Tilin {username} asetukset.",
         "data": {
-          "password": "Salasana",
           "language": "Kieli",
           "prioritize_undelivered": "Toimittamattomat paketit ensin",
           "max_shipments": "Pakettien enimmäismäärä",
@@ -45,7 +54,6 @@
           "include_pickup_details": "Noutopiste ja koodi"
         },
         "data_description": {
-          "password": "Jätä tyhjäksi, niin tallennettu salasana säilyy.",
           "language": "Kieli, jolla pakettien tapahtumat kuvataan.",
           "prioritize_undelivered": "Kun paketteja on enemmän kuin enimmäismäärä, toimittamattomat näytetään ennen toimitettuja.",
           "max_shipments": "Kuinka monta pakettia sensori listaa.",
@@ -56,13 +64,18 @@
       }
     },
     "error": {
-      "invalid_auth": "Posti ei hyväksynyt käyttäjätunnusta ja salasanaa.",
-      "cannot_connect": "Postiin ei saatu yhteyttä. Yritä hetken kuluttua uudelleen."
+      "invalid_auth": "Posti ei hyväksynyt tunnistautumista. Valitse tunnistustapa ja yritä uudelleen.",
+      "cannot_connect": "Postiin ei saatu yhteyttä. Yritä hetken kuluttua uudelleen.",
+      "invalid_address": "Osoite ei ole oikeassa muodossa. Kopioi tunnistautumisen jälkeen koko osoite osoiteriviltä.",
+      "device_failed": "Posti ei hyväksynyt Home Assistantia laitteeksi. Kirjaudu uudelleen.",
+      "no_account": "Postin kirjautuminen ei kertonut, mikä tili on kyseessä. Kirjaudu uudelleen."
     },
     "abort": {
       "already_configured": "Tämä tili on jo lisätty.",
-      "reauth_successful": "Salasana toimii, ja se on tallennettu.",
-      "reconfigure_successful": "Asetukset tallennettu."
+      "cannot_connect": "Postiin ei saatu yhteyttä. Yritä hetken kuluttua uudelleen.",
+      "reauth_successful": "Kirjauduttu uudelleen. Paketit päivittyvät hetken kuluttua.",
+      "reconfigure_successful": "Asetukset tallennettu.",
+      "wrong_account": "Kirjautuminen tapahtui eri OmaPosti-tilillä kuin nykyinen määritys. Kirjaudu samalla tilillä tai lisää toinen tili erikseen."
     }
   },
   "selector": {
@@ -70,6 +83,22 @@
       "options": {
         "fi": "Suomi",
         "en": "English"
+      }
+    },
+    "method": {
+      "options": {
+        "mobileid": "Mobiilivarmenne",
+        "aktia": "Aktia",
+        "danske": "Danske Bank",
+        "nordea": "Nordea",
+        "omasp": "Oma Säästöpankki",
+        "op": "OP",
+        "pop": "POP Pankki",
+        "spankki": "S-Pankki",
+        "saastopankki": "Säästöpankki",
+        "alandsbanken": "Ålandsbanken",
+        "htid": "hightrust.id",
+        "hst": "Henkilökortti"
       }
     }
   },

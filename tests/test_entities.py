@@ -44,7 +44,7 @@ async def set_up(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> MockCon
 
 
 async def test_the_counts_of_the_packages(
-    hass: HomeAssistant, omaposti: AiohttpClientMocker, login: Any, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, omaposti: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
 ) -> None:
     await set_up(hass, freezer)
 
@@ -58,7 +58,7 @@ async def test_the_counts_of_the_packages(
 
 
 async def test_the_packages_already_there_are_not_events(
-    hass: HomeAssistant, omaposti: AiohttpClientMocker, login: Any, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, omaposti: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
 ) -> None:
     await set_up(hass, freezer)
 
@@ -74,7 +74,7 @@ async def test_the_packages_already_there_are_not_events(
 
 
 async def test_a_package_becoming_ready_for_pickup_fires_an_event(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, login: Any, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
 ) -> None:
     moving = shipment("JJFI0100", "IN_TRANSPORT", event("2026-09-16T05:30:00Z", "Kuljetuksessa", "In transport"))
     arrived = shipment(
@@ -108,7 +108,7 @@ async def test_a_package_becoming_ready_for_pickup_fires_an_event(
 
 
 async def test_every_change_of_one_update_fires_its_own_event(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, login: Any, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
 ) -> None:
     before = [
         shipment("JJFI0201", "IN_TRANSPORT", event("2026-09-16T05:30:00Z", "Kuljetuksessa", "In transport")),

@@ -1,9 +1,13 @@
 """Logging in to OmaPosti like its Android app does.
 
-The app opens Posti's login page in a web view with a PKCE challenge, submits
-the user name and password there, and exchanges the authorisation code it gets
-back for tokens. This takes the same steps with requests, whose redirects and
-cookies behave like the web view's. It blocks, so it runs in an executor.
+The app opens Posti's login page in a web view with a PKCE challenge, the user
+authenticates strongly there with their bank or Mobiilivarmenne, and the app
+exchanges the authorisation code it gets back for tokens. Here the bank leg
+happens in the user's own browser and the integration does the rest: it starts
+the login, gives the user the bank's address, and finishes the login with the
+address the user lands on. Posti binds the code to the PKCE challenge only when
+the requests carry the web view's X-Requested-With header, which a browser can't
+send, so the Posti side has to be done here.
 """
 
 from __future__ import annotations
@@ -17,26 +21,182 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Any
 
-import requests
+import aiohttp
+from yarl import URL
 
 from .const import (
     APP_PACKAGE,
     APP_USER_AGENT,
     AUTH_SERVICE_URL,
-    LOGIN_ENTITY_ID,
     LOGIN_REDIRECT_URI,
-    UAS_URL,
+    UAS_HOST,
     WEB_VIEW_USER_AGENT,
 )
-from .exceptions import PostiAuthError, PostiError
+from .exceptions import InvalidReturnAddress, PostiAuthError, PostiError
 
 TIMEOUT_SECONDS = 20
+TIMEOUT = aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)
 FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 
-CALLBACK = "auth-service.posti.fi/api/v1/oidc_callback"
-SESSION_ID = re.compile(r"_id=(.+?)(?:$|&)")
 CODE = re.compile(r"code=([^&]+)")
-FORM = re.compile(r"<form[^>]+action=[\"']([^\"']+)[\"'][^>]*>(.*?)</form>", re.DOTALL | re.IGNORECASE)
+QUOTED = re.compile(r"[\"']([^\"']*)[\"']")
+BANK_FORM = re.compile(r"<form[^>]+action=[\"']([^\"']*tunnistus\.telia\.fi[^\"']*)[\"']", re.IGNORECASE)
+
+# What the login web view sends with every request to Posti's login pages.
+WEB_VIEW_HEADERS = {
+    "User-Agent": WEB_VIEW_USER_AGENT,
+    "x-posti-mobile": "android",
+    "X-Requested-With": APP_PACKAGE,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+APP_HEADERS = {"User-Agent": APP_USER_AGENT, "Content-Type": FORM_CONTENT_TYPE}
+
+
+@dataclass(frozen=True)
+class StrongLogin:
+    """A started login. Its session's cookies must last until the login is finished."""
+
+    verifier: str
+    # The authentication methods Posti offers, by their id (telia.ftn.oidc.<provider>.1), and the address choosing one.
+    methods: dict[str, str]
+
+
+async def start_login(session: aiohttp.ClientSession) -> StrongLogin:
+    """Starts a login and reads the authentication methods Posti offers for it."""
+    pkce = new_pkce()
+    _, body = await request_json(
+        session,
+        "POST",
+        f"{AUTH_SERVICE_URL}/device_login",
+        headers=APP_HEADERS,
+        data={
+            "redirect_uri": LOGIN_REDIRECT_URI,
+            "locale": "fi",
+            "code_challenge": pkce.challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    login_url = body.get("login_url")
+    if not isinstance(login_url, str):
+        raise PostiError("Posti's login service didn't give a login page")
+
+    _, page = await request_page(session, login_url)
+    methods = authentication_methods(page)
+    if not methods:
+        raise PostiError("Posti's login page offered no authentication methods")
+    return StrongLogin(pkce.verifier, methods)
+
+
+async def bank_address(session: aiohttp.ClientSession, login: StrongLogin, method: str) -> str:
+    """Chooses an authentication method, and returns the address where the user authenticates with it."""
+    if method not in login.methods:
+        raise PostiError(f"Posti didn't offer the authentication method {method}")
+    _, page = await request_page(session, f"https://{UAS_HOST}{login.methods[method]}")
+    address = bank_form_address(page)
+    if address is None:
+        raise PostiError("Posti's login page didn't hand over to the authentication service")
+    return address
+
+
+async def finish_login(session: aiohttp.ClientSession, login: StrongLogin, return_address: str) -> dict[str, Any]:
+    """Finishes the login with the address the user's browser landed on after authenticating, and returns the tokens."""
+    return_address = checked_return_address(return_address)
+    _, page = await request_page(session, return_address)
+    code = hidden_input(page, "code")
+    state = hidden_input(page, "state")
+    if not code or not state:
+        # An address used already, or one of a login that has expired, leads to an error page.
+        raise PostiAuthError("Posti didn't accept the authentication")
+
+    callback = (
+        f"{AUTH_SERVICE_URL}/device_oidc_callback"
+        f"?code={urllib.parse.quote(code, safe='')}&state={urllib.parse.quote(state, safe='')}"
+    )
+    location, _ = await request_page(session, callback, follow_redirects=False)
+    match = CODE.search(location)
+    if not match:
+        raise PostiAuthError("Posti didn't give an authorisation code")
+
+    code = urllib.parse.unquote(match.group(1))
+    _, tokens = await request_json(
+        session,
+        "POST",
+        f"{AUTH_SERVICE_URL}/token_v2",
+        headers=APP_HEADERS,
+        data=f"code={urllib.parse.quote(code, safe='')}&code_verifier={login.verifier}&grant_type=authorization_code",
+    )
+    if "error" in tokens or not tokens.get("id_token"):
+        raise PostiAuthError(f"Posti didn't give tokens: {tokens.get('error')}")
+    return tokens
+
+
+def authentication_methods(page: str) -> dict[str, str]:
+    """The authentication methods on the login page, by id, with the address choosing each, in the page's order."""
+    methods: dict[str, str] = {}
+    for quoted in QUOTED.findall(page):
+        address = html.unescape(quoted)
+        parts = urllib.parse.urlsplit(address)
+        if not (parts.path.startswith("/uas/authn/") and parts.path.endswith("/select")):
+            continue
+        method = urllib.parse.parse_qs(parts.query).get("method", [""])[0]
+        if method and method not in methods:
+            methods[method] = address
+    return methods
+
+
+def bank_form_address(page: str) -> str | None:
+    """The authentication service's address on the page that hands the user over to it."""
+    form = BANK_FORM.search(page)
+    request = hidden_input(page, "request")
+    if form is None or request is None:
+        return None
+    return f"{html.unescape(form.group(1))}?request={urllib.parse.quote(request, safe='')}"
+
+
+def checked_return_address(address: str) -> str:
+    """The pasted address, when it is one Posti's login returns to from the authentication service."""
+    address = address.strip()
+    parts = urllib.parse.urlsplit(address)
+    if (
+        parts.scheme != "https"
+        or parts.hostname != UAS_HOST
+        or not parts.path.startswith("/uas/return/")
+        or "code" not in urllib.parse.parse_qs(parts.query)
+    ):
+        raise InvalidReturnAddress("The address isn't one Posti's login returns to")
+    return address
+
+
+async def request_page(session: aiohttp.ClientSession, url: str, follow_redirects: bool = True) -> tuple[str, str]:
+    """GETs a login page like the web view does. Returns the redirect's target when not following it, and the page."""
+    try:
+        # Posti's addresses are sent as they are; re-encoding them could change the signed request in them.
+        async with session.get(
+            URL(url, encoded=True), headers=WEB_VIEW_HEADERS, allow_redirects=follow_redirects, timeout=TIMEOUT
+        ) as response:
+            if response.status >= 400:
+                raise PostiError(f"Posti's login page answered with status {response.status}")
+            return response.headers.get("Location", ""), await response.text()
+    except (aiohttp.ClientError, TimeoutError) as err:
+        raise PostiError(f"Posti couldn't be reached: {err}") from err
+
+
+async def request_json(
+    session: aiohttp.ClientSession, method: str, url: str, **kwargs: Any
+) -> tuple[int, dict[str, Any]]:
+    """Sends a request to one of Posti's APIs, and returns the status and the JSON object it answered with."""
+    try:
+        async with session.request(method, url, timeout=TIMEOUT, **kwargs) as response:
+            status = response.status
+            try:
+                body = await response.json(content_type=None)
+            except ValueError as err:
+                raise PostiError(f"Posti answered with something other than JSON (status {status})") from err
+    except (aiohttp.ClientError, TimeoutError) as err:
+        raise PostiError(f"Posti couldn't be reached: {err}") from err
+    if not isinstance(body, dict):
+        raise PostiError(f"Posti answered in an unexpected format (status {status})")
+    return status, body
 
 
 @dataclass(frozen=True)
@@ -45,131 +205,12 @@ class Pkce:
     challenge: str
 
 
-@dataclass(frozen=True)
-class Authorization:
-    code: str
-    # The app's callback address, visited like the app does when the code comes on the success page.
-    callback_url: str | None = None
-
-
-def log_in(username: str, password: str) -> dict[str, Any]:
-    """Logs in, and returns the tokens: access, id and refresh tokens, and the role tokens."""
-    pkce = new_pkce()
-    try:
-        with requests.Session() as session:
-            response = session.get(
-                f"{AUTH_SERVICE_URL}/login",
-                params={
-                    "redirect_uri": LOGIN_REDIRECT_URI,
-                    "code_challenge": pkce.challenge,
-                    "code_challenge_method": "S256",
-                    "redirect": "false",
-                    "locale": "fi",
-                    "mobile": "true",
-                },
-                headers={"User-Agent": APP_USER_AGENT},
-                timeout=TIMEOUT_SECONDS,
-            )
-            login_url = json_body(response).get("login_url")
-            if not login_url:
-                raise PostiError("Posti's login service didn't give a login page")
-
-            response = session.get(
-                login_url,
-                headers={
-                    "User-Agent": WEB_VIEW_USER_AGENT,
-                    "x-posti-mobile": "android",
-                    "X-Requested-With": APP_PACKAGE,
-                },
-                timeout=TIMEOUT_SECONDS,
-            )
-            login_session = session_id(response.url)
-            if not login_session:
-                raise PostiError("Posti's login page didn't start a login")
-
-            response = session.post(
-                f"{UAS_URL}/authn/{login_session}/submit",
-                params={"entityID": LOGIN_ENTITY_ID, "locale": "fi"},
-                headers={
-                    "User-Agent": WEB_VIEW_USER_AGENT,
-                    "Content-Type": FORM_CONTENT_TYPE,
-                    "X-Requested-With": APP_PACKAGE,
-                },
-                data=credentials_form(username, password),
-                timeout=TIMEOUT_SECONDS,
-            )
-            found = authorization(
-                [redirect.headers.get("Location", "") for redirect in response.history], response.url, response.text
-            )
-            if found is None:
-                # With wrong credentials, Posti shows the login page again instead of an authorisation code.
-                raise PostiAuthError("Posti didn't accept the user name and password")
-            if found.callback_url:
-                session.get(found.callback_url, timeout=TIMEOUT_SECONDS, allow_redirects=True)
-
-            response = session.post(
-                f"{AUTH_SERVICE_URL}/token_v2",
-                headers={"User-Agent": APP_USER_AGENT, "Content-Type": FORM_CONTENT_TYPE},
-                # The code is sent as it came, already encoded, like the app sends it.
-                data=f"code={found.code}&code_verifier={pkce.verifier}&grant_type=authorization_code",
-                timeout=TIMEOUT_SECONDS,
-            )
-            tokens = json_body(response)
-    except requests.RequestException as err:
-        raise PostiError(f"Posti couldn't be reached: {err}") from err
-
-    if "error" in tokens or not tokens.get("id_token"):
-        raise PostiError(f"Posti didn't give tokens: {tokens.get('error')}")
-    return tokens
-
-
 def new_pkce() -> Pkce:
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     return Pkce(verifier, challenge)
 
 
-def credentials_form(username: str, password: str) -> str:
-    return f"username={urllib.parse.quote(username)}&password={urllib.parse.quote(password)}&method=passwordsql"
-
-
-def session_id(url: str) -> str | None:
-    """The login session in the login page's address."""
-    match = SESSION_ID.search(url)
-    return match.group(1) if match else None
-
-
-def authorization(redirects: list[str], final_url: str, page: str) -> Authorization | None:
-    """The authorisation code after submitting the credentials.
-
-    It is in a redirect to the app's callback, in the final address, or in the
-    automatically submitted form of the success page. None when it is in none of
-    them, which is what wrong credentials look like.
-    """
-    for location in redirects:
-        if CALLBACK in location and (match := CODE.search(location)):
-            return Authorization(match.group(1))
-    if match := CODE.search(final_url):
-        return Authorization(match.group(1))
-    if "success.jsp" in page and (form := FORM.search(page)):
-        code = hidden_input(form.group(2), "code")
-        if code:
-            state = hidden_input(form.group(2), "state")
-            callback_url = f"{html.unescape(form.group(1))}?code={code}&state={state}" if state else None
-            return Authorization(code, callback_url)
-    return None
-
-
 def hidden_input(form: str, name: str) -> str | None:
     match = re.search(rf"<input[^>]+name=[\"']{name}[\"'][^>]+value=[\"']([^\"']+)[\"']", form, re.IGNORECASE)
     return html.unescape(match.group(1)) if match else None
-
-
-def json_body(response: requests.Response) -> dict[str, Any]:
-    try:
-        body = response.json()
-    except ValueError as err:
-        raise PostiError(f"Posti answered with something other than JSON (status {response.status_code})") from err
-    if not isinstance(body, dict):
-        raise PostiError("Posti answered in an unexpected format")
-    return body

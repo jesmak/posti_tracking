@@ -6,4 +6,8 @@ class PostiError(Exception):
 
 
 class PostiAuthError(PostiError):
-    """Posti didn't accept the user name and password."""
+    """Posti didn't accept the login, or the integration's device is no longer trusted."""
+
+
+class InvalidReturnAddress(PostiError):
+    """The address pasted after the strong authentication isn't the one Posti returns to."""
