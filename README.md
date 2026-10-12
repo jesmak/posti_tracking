@@ -241,7 +241,7 @@ python3.14 -m venv .venv
 [license-shield]: https://img.shields.io/github/license/jesmak/posti_tracking.svg?style=for-the-badge
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
 [commits-shield]: https://img.shields.io/github/commit-activity/y/jesmak/posti_tracking.svg?style=for-the-badge
-[commits]: https://github.com/jesmak/posti_tracking/commits/master
+[commits]: https://github.com/jesmak/posti_tracking/commits/main
 [bugs-shield]: https://img.shields.io/github/issues/jesmak/posti_tracking/bug?style=for-the-badge&label=bugs&color=red
 [bugs]: https://github.com/jesmak/posti_tracking/labels/bug
 [enhancements-shield]: https://img.shields.io/github/issues/jesmak/posti_tracking/enhancement?style=for-the-badge&label=enhancements&color=blue
