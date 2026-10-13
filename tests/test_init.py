@@ -75,9 +75,7 @@ async def test_packages_are_kept_out_of_the_recorder() -> None:
 
 
 async def test_an_entry_of_1_x_gets_a_unique_id(hass: HomeAssistant) -> None:
-    entry = account(
-        hass, minor_version=1, unique_id=None, data=PASSWORD_ENTRY_DATA | {"username": "Matti.Meikalainen@example.com"}
-    )
+    entry = account(hass, minor_version=1, unique_id=None, data=PASSWORD_ENTRY_DATA | {"username": "Matti.Meikalainen@example.com"})
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -154,9 +152,7 @@ async def test_removing_an_account_deactivates_its_device(hass: HomeAssistant) -
     assert deactivate.call_args.args[1:] == (device, device.device_id, VALID_TOKENS["id_token"])
 
 
-async def test_a_device_that_cannot_be_deactivated_is_left_to_the_user(
-    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-) -> None:
+async def test_a_device_that_cannot_be_deactivated_is_left_to_the_user(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
     entry = account(hass)
     with patch("custom_components.posti_tracking.deactivate", side_effect=PostiError("Posti couldn't be reached")):
         await hass.config_entries.async_remove(entry.entry_id)

@@ -63,9 +63,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> b
     if entry.version != 1:
         return False
     if entry.minor_version < 2:
-        hass.config_entries.async_update_entry(
-            entry, unique_id=entry.data[CONF_USERNAME].strip().lower(), minor_version=2
-        )
+        hass.config_entries.async_update_entry(entry, unique_id=entry.data[CONF_USERNAME].strip().lower(), minor_version=2)
     if entry.minor_version < 3:
         # Posti no longer accepts passwords, so there is no reason to keep one. Setting up asks for a new login.
         data = {key: value for key, value in entry.data.items() if key != CONF_PASSWORD}

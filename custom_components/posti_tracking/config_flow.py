@@ -68,9 +68,7 @@ SETTING_FIELDS = {
         SelectSelectorConfig(options=LANGUAGES, translation_key=CONF_LANGUAGE, mode=SelectSelectorMode.DROPDOWN)
     ),
     vol.Required(CONF_PRIORITIZE_UNDELIVERED): BooleanSelector(),
-    vol.Required(CONF_MAX_SHIPMENTS): NumberSelector(
-        NumberSelectorConfig(min=1, max=50, step=1, mode=NumberSelectorMode.BOX)
-    ),
+    vol.Required(CONF_MAX_SHIPMENTS): NumberSelector(NumberSelectorConfig(min=1, max=50, step=1, mode=NumberSelectorMode.BOX)),
     vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT): DAYS_SELECTOR,
     vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN): DAYS_SELECTOR,
     vol.Required(CONF_INCLUDE_PICKUP_DETAILS): BooleanSelector(),
@@ -86,11 +84,7 @@ METHOD_ID = re.compile(r"telia\.ftn\.oidc\.([a-z0-9_]+)\.1")
 
 def clean_settings(user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Submitted settings, normalised for storing."""
-    data = {
-        key: user_input[key]
-        for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED, CONF_INCLUDE_PICKUP_DETAILS)
-        if key in user_input
-    }
+    data = {key: user_input[key] for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED, CONF_INCLUDE_PICKUP_DETAILS) if key in user_input}
     for key in (CONF_MAX_SHIPMENTS, CONF_STALE_SHIPMENT_DAY_LIMIT, CONF_COMPLETED_SHIPMENT_DAYS_SHOWN):
         if key in user_input:
             data[key] = int(user_input[key])
@@ -167,9 +161,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_METHOD): SelectSelector(
-                    SelectSelectorConfig(
-                        options=list(self._choices), translation_key=CONF_METHOD, mode=SelectSelectorMode.DROPDOWN
-                    )
+                    SelectSelectorConfig(options=list(self._choices), translation_key=CONF_METHOD, mode=SelectSelectorMode.DROPDOWN)
                 )
             }
         )
@@ -241,9 +233,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         if self.source == SOURCE_REAUTH:
             entry = self._get_reauth_entry()
             data = {key: value for key, value in entry.data.items() if key != CONF_PASSWORD}
-            return self.async_update_reload_and_abort(
-                entry, data={**data, CONF_DEVICE: device.as_data(), CONF_TOKENS: tokens}
-            )
+            return self.async_update_reload_and_abort(entry, data={**data, CONF_DEVICE: device.as_data(), CONF_TOKENS: tokens})
         self._account = {"title": email, CONF_DEVICE: device.as_data(), CONF_TOKENS: tokens}
         return await self.async_step_settings()
 
@@ -286,9 +276,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         to finish it: Posti's login doesn't last long.
         """
         if user_input is None:
-            return self.async_show_form(
-                step_id="reauth_confirm", description_placeholders={"username": self._get_reauth_entry().title}
-            )
+            return self.async_show_form(step_id="reauth_confirm", description_placeholders={"username": self._get_reauth_entry().title})
         return await self._show_methods()
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

@@ -27,9 +27,7 @@ async def answer(shipments: list[dict[str, Any]]) -> AiohttpClientMockResponse:
 
 
 def account(hass: HomeAssistant) -> MockConfigEntry:
-    entry = MockConfigEntry(
-        domain=DOMAIN, title=USERNAME, version=1, minor_version=2, unique_id=USERNAME, data=ENTRY_DATA
-    )
+    entry = MockConfigEntry(domain=DOMAIN, title=USERNAME, version=1, minor_version=2, unique_id=USERNAME, data=ENTRY_DATA)
     entry.add_to_hass(hass)
     return entry
 

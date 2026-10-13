@@ -109,8 +109,7 @@ async def finish_login(session: aiohttp.ClientSession, login: StrongLogin, retur
         raise PostiAuthError("Posti didn't accept the authentication")
 
     callback = (
-        f"{AUTH_SERVICE_URL}/device_oidc_callback"
-        f"?code={urllib.parse.quote(code, safe='')}&state={urllib.parse.quote(state, safe='')}"
+        f"{AUTH_SERVICE_URL}/device_oidc_callback?code={urllib.parse.quote(code, safe='')}&state={urllib.parse.quote(state, safe='')}"
     )
     location, _ = await request_page(session, callback, follow_redirects=False)
     match = CODE.search(location)
@@ -181,9 +180,7 @@ async def request_page(session: aiohttp.ClientSession, url: str, follow_redirect
         raise PostiError(f"Posti couldn't be reached: {err}") from err
 
 
-async def request_json(
-    session: aiohttp.ClientSession, method: str, url: str, **kwargs: Any
-) -> tuple[int, dict[str, Any]]:
+async def request_json(session: aiohttp.ClientSession, method: str, url: str, **kwargs: Any) -> tuple[int, dict[str, Any]]:
     """Sends a request to one of Posti's APIs, and returns the status and the JSON object it answered with."""
     try:
         async with session.request(method, url, timeout=TIMEOUT, **kwargs) as response:

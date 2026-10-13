@@ -31,9 +31,7 @@ def test_token_expiry() -> None:
     assert token_expires_soon({}, now)
 
 
-async def test_shipments_with_valid_tokens(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_shipments_with_valid_tokens(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     aioclient_mock.post(GRAPH_API_URL, json={"data": {"shipment": SHIPMENTS}})
 
     assert len(await client(hass, VALID_TOKENS).shipments()) == len(SHIPMENTS)
@@ -45,9 +43,7 @@ async def test_shipments_with_valid_tokens(
     renewal.assert_not_called()
 
 
-async def test_expiring_tokens_are_renewed_with_the_device(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_expiring_tokens_are_renewed_with_the_device(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     renewal.return_value = {"id_token": "id-2", "access_token": "access-2"}
     aioclient_mock.post(GRAPH_API_URL, json={"data": {"shipment": SHIPMENTS}})
     saved: list[dict] = []
@@ -64,43 +60,33 @@ async def test_expiring_tokens_are_renewed_with_the_device(
     assert query[3]["Authorization"] == "Bearer id-2"
 
 
-async def test_tokens_omaposti_refuses_are_renewed(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_tokens_omaposti_refuses_are_renewed(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     aioclient_mock.post(GRAPH_API_URL, side_effect=answers((401, None), (200, {"data": {"shipment": SHIPMENTS}})))
 
     assert len(await client(hass, VALID_TOKENS).shipments()) == len(SHIPMENTS)
     renewal.assert_called_once()
 
 
-async def test_renewed_tokens_omaposti_refuses(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_renewed_tokens_omaposti_refuses(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     aioclient_mock.post(GRAPH_API_URL, status=401)
     with pytest.raises(PostiAuthError):
         await client(hass, VALID_TOKENS).shipments()
 
 
-async def test_a_device_posti_no_longer_trusts(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_a_device_posti_no_longer_trusts(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     renewal.side_effect = PostiAuthError("deactivated")
     with pytest.raises(PostiAuthError):
         await client(hass, EXPIRED_TOKENS).shipments()
 
 
-async def test_server_errors_are_not_login_problems(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_server_errors_are_not_login_problems(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     aioclient_mock.post(GRAPH_API_URL, status=503)
     with pytest.raises(PostiError) as error:
         await client(hass, VALID_TOKENS).shipments()
     assert not isinstance(error.value, PostiAuthError)
 
 
-async def test_a_login_without_a_consumer_role(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any
-) -> None:
+async def test_a_login_without_a_consumer_role(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     with pytest.raises(PostiError):
         await client(hass, {**VALID_TOKENS, "role_tokens": [{"type": "business", "token": "x"}]}).shipments()
 

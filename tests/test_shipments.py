@@ -96,9 +96,7 @@ def test_missing_details_have_fallbacks() -> None:
 
 
 def test_times_are_utc() -> None:
-    [package] = build_packages(
-        [shipment("JJFI0010", "RECEIVED", event("2026-09-16T08:59:00", "x", "x"))], SETTINGS, "fi", NOW
-    ).packages
+    [package] = build_packages([shipment("JJFI0010", "RECEIVED", event("2026-09-16T08:59:00", "x", "x"))], SETTINGS, "fi", NOW).packages
     assert package["status"] == 2
     assert build_packages([], SETTINGS, "fi", NOW) == Packages(None, [])
 

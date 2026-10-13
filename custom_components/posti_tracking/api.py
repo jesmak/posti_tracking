@@ -93,9 +93,7 @@ def shipments_in(status: int, body: Any) -> list[dict[str, Any]]:
     return [shipment for shipment in shipments if isinstance(shipment, dict)]
 
 
-def token_expires_soon(
-    tokens: Mapping[str, Any], now: float, margin: float = TOKEN_EXPIRY_MARGIN.total_seconds()
-) -> bool:
+def token_expires_soon(tokens: Mapping[str, Any], now: float, margin: float = TOKEN_EXPIRY_MARGIN.total_seconds()) -> bool:
     """Whether the id token has expired or expires within the margin. A token that can't be read counts as expired."""
     payload = jwt_payload(tokens.get("id_token"))
     expiry = payload.get("exp") if payload else None

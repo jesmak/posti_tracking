@@ -35,9 +35,7 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
         )
         self.settings = PackageSettings.from_data(entry.data)
         self.language = entry.data[CONF_LANGUAGE]
-        self.client = PostiClient(
-            hass, Device.from_data(entry.data[CONF_DEVICE]), entry.data[CONF_TOKENS], self._save_tokens
-        )
+        self.client = PostiClient(hass, Device.from_data(entry.data[CONF_DEVICE]), entry.data[CONF_TOKENS], self._save_tokens)
 
     @callback
     def _save_tokens(self, tokens: dict[str, Any]) -> None:
@@ -45,9 +43,7 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
 
         The entry has no update listener, so saving the tokens doesn't reload the integration.
         """
-        self.hass.config_entries.async_update_entry(
-            self.config_entry, data={**self.config_entry.data, CONF_TOKENS: tokens}
-        )
+        self.hass.config_entries.async_update_entry(self.config_entry, data={**self.config_entry.data, CONF_TOKENS: tokens})
 
     async def _async_update_data(self) -> Packages:
         try:

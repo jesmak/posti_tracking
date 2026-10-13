@@ -108,18 +108,14 @@ async def test_renewing_the_tokens(hass: HomeAssistant, aioclient_mock: AiohttpC
         (404, {"error": "not_found"}),
     ],
 )
-async def test_a_deactivated_device(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, answer: dict
-) -> None:
+async def test_a_deactivated_device(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, answer: dict) -> None:
     aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, json=answer)
 
     with pytest.raises(PostiAuthError):
         await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
 
 
-async def test_other_vault_errors_are_not_reauthentication(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
+async def test_other_vault_errors_are_not_reauthentication(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
     aioclient_mock.post(f"{MFA_URL}/device_refresh", status=500, json={"error": "server_error"})
 
     with pytest.raises(PostiError) as raised:

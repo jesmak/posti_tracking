@@ -75,9 +75,7 @@ async def to_authentication(hass: HomeAssistant) -> dict:
     return await hass.config_entries.flow.async_configure(result["flow_id"], {"method": "op"})
 
 
-async def test_adding_an_account(
-    hass: HomeAssistant, omaposti: AiohttpClientMocker, strong_login: dict[str, Any]
-) -> None:
+async def test_adding_an_account(hass: HomeAssistant, omaposti: AiohttpClientMocker, strong_login: dict[str, Any]) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     [field] = result["data_schema"].schema
     # Mobiilivarmenne first, then the known methods in their order, then the ones Posti added later.

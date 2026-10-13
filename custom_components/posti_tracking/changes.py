@@ -53,9 +53,7 @@ class PackageChange:
         return {key: self.package.get(key) for key in EVENT_KEYS}
 
 
-def detect_changes(
-    previous: Sequence[Mapping[str, Any]] | None, current: Iterable[Mapping[str, Any]]
-) -> list[PackageChange]:
+def detect_changes(previous: Sequence[Mapping[str, Any]] | None, current: Iterable[Mapping[str, Any]]) -> list[PackageChange]:
     """The events between two lists of packages.
 
     Nothing is reported for the first update: the packages that are already there

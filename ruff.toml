@@ -1,0 +1,10 @@
+line-length = 140
+# py313 keeps `except (A, B):` parenthesised; the 3.14 form without parentheses is easy to misread.
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[lint.isort]
+known-first-party = ["custom_components"]
+known-third-party = ["homeassistant"]

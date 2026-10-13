@@ -97,9 +97,7 @@ async def provision(session: aiohttp.ClientSession, tokens: Mapping[str, Any]) -
     key = await asyncio.get_running_loop().run_in_executor(None, new_key)
     salt = secrets.token_bytes(32)
     secret = authorization_secret(salt)
-    public_key = key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    )
+    public_key = key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
     status, registered = await request_json(
         session,
         "POST",
@@ -123,9 +121,7 @@ async def provision(session: aiohttp.ClientSession, tokens: Mapping[str, Any]) -
 
     device = Device(
         device_id,
-        key.private_bytes(
-            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-        ).decode(),
+        key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode(),
         base64.b64encode(salt).decode(),
         subject,
     )
@@ -157,8 +153,7 @@ async def first_refresh(
         f"{AUTH_SERVICE_URL}/device_refresh",
         headers=APP_HEADERS,
         # Sent as it is, unencoded, like the app sends it.
-        data=f"refresh_token={tokens.get('refresh_token')}&device_trust_token={trust_token}"
-        f"&id_token={tokens.get('id_token')}",
+        data=f"refresh_token={tokens.get('refresh_token')}&device_trust_token={trust_token}&id_token={tokens.get('id_token')}",
     )
     if "error" in fresh or not fresh.get("id_token"):
         raise PostiError(f"Posti didn't renew the tokens of the new device: {error_of(fresh)}")
@@ -214,8 +209,7 @@ async def deactivate(session: aiohttp.ClientSession, device: Device, target_id: 
             "device_sig": sign(key, f"device|{device.device_id}|{timestamp}".encode()),
             "user_sig": sign(
                 key,
-                f"user|{device.subject}|{device.device_id}|{timestamp}|{device.authorization_secret}|".encode()
-                + context.rstrip(b"="),
+                f"user|{device.subject}|{device.device_id}|{timestamp}|{device.authorization_secret}|".encode() + context.rstrip(b"="),
             ),
         },
     )
@@ -243,9 +237,7 @@ def signed_body(device: Device, key: rsa.RSAPrivateKey, timestamp: int | None = 
         "device_id": device.device_id,
         "device_sig": sign(key, f"device|{device.device_id}|{timestamp}".encode()),
         "timestamp": timestamp,
-        "user_sig": sign(
-            key, f"user|{device.subject}|{device.device_id}|{timestamp}|{device.authorization_secret}|".encode()
-        ),
+        "user_sig": sign(key, f"user|{device.subject}|{device.device_id}|{timestamp}|{device.authorization_secret}|".encode()),
     }
 
 

@@ -64,9 +64,7 @@ def test_authentication_methods_are_read_from_the_login_page() -> None:
 
 
 def test_the_bank_address_from_the_hand_over_page() -> None:
-    assert bank_form_address(BANK_PAGE) == (
-        "https://tunnistus.telia.fi/uas/oauth2/authorization?request=eyJ.request%2Bpart%2F%3D"
-    )
+    assert bank_form_address(BANK_PAGE) == ("https://tunnistus.telia.fi/uas/oauth2/authorization?request=eyJ.request%2Bpart%2F%3D")
     assert bank_form_address(RETURN_PAGE) is None
 
 
@@ -120,9 +118,7 @@ async def test_the_strong_authentication_login(hass: HomeAssistant, aioclient_mo
     assert calls[5][2] == f"code=eyJ.final%2Bcode&code_verifier={login.verifier}&grant_type=authorization_code"
 
 
-async def test_an_authentication_posti_no_longer_accepts(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
+async def test_an_authentication_posti_no_longer_accepts(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
     aioclient_mock.get(RETURN_ADDRESS, text="<html>Istunto on vanhentunut</html>")
     login = StrongLogin("verifier", {"telia.ftn.oidc.nordea.1": "/uas/authn/session-1/select"})
 
