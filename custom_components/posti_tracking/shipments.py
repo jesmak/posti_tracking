@@ -184,7 +184,7 @@ def package(
         "package_count": whole_number(shipment.get("packageQuantity")),
         "pickup_point": pickup_point(point, with_door=with_code),
         "pickup_code": code,
-        "pickup_qr": pickup_qr(point) if settings.pickup_code == PICKUP_CODE_CODE_AND_QR else None,
+        "pickup_qr": pickup_qr(point, code) if settings.pickup_code == PICKUP_CODE_CODE_AND_QR else None,
         "source": "Posti",
         "tracking_url": tracking_url(shipment_number),
     }
@@ -213,12 +213,12 @@ def pickup_code(point: Mapping[str, Any]) -> str | None:
     return str(code) if code else None
 
 
-def pickup_qr(point: Mapping[str, Any]) -> str | None:
-    """What a QR code for the counter holds: the counter's plain pickup code, at the pickup points that scan one.
+def pickup_qr(point: Mapping[str, Any], code: str | None) -> str | None:
+    """What a QR code for the counter holds: the pickup code as it is shown, at the pickup points that scan one.
 
-    It is the pupCode on purpose: a counter takes that code, not a locker's even if Posti were to send both."""
-    code = point.get("pupCode")
-    return str(code) if code and point.get("type") in QR_POINT_TYPES else None
+    Posti's notices of arrival encode the code people see, such as P12345, whichever field it comes in. A counter
+    package can have a pupCode of another kind beside it, a long number, which is not it."""
+    return code if code and point.get("type") in QR_POINT_TYPES else None
 
 
 def number(value: Any) -> float | None:

@@ -227,12 +227,14 @@ def test_a_setting_that_is_not_known_keeps_the_code_out(setting: str) -> None:
     assert package["pickup_point"]["compartment"] is None
 
 
-def test_the_qr_code_holds_the_counters_code_even_when_a_locker_code_is_sent_too() -> None:
-    counter = {"type": "POSTI", "lockerCode": "LOCKER-1", "pupCode": "PUP-1", "location": {"city": "LAPPEENRANTA"}}
+def test_the_qr_code_holds_the_code_that_is_shown_not_the_other_number_posti_sends() -> None:
+    # As reported: a counter package with both, the code shown as P12345 and a long pupCode beside it.
+    counter = {"type": "NOUTOPISTE", "lockerCode": "P12345", "pupCode": "100000001", "location": {"city": "LAPPEENRANTA"}}
     [package] = build_packages(
         [{**with_details(), "pickupPoint": counter}], replace(SETTINGS, pickup_code="code_and_qr"), "fi", NOW
     ).packages
-    assert package["pickup_qr"] == "PUP-1"
+    assert package["pickup_code"] == "P12345"
+    assert package["pickup_qr"] == "P12345"
 
 
 def test_a_package_listed_twice_is_kept_once_as_its_newest_copy() -> None:
