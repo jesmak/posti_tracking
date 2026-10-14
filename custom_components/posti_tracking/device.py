@@ -169,8 +169,12 @@ async def refresh(session: aiohttp.ClientSession, device: Device, id_token: str)
     status, body = await request_json(
         session, "POST", f"{MFA_URL}/device_refresh", headers=bearer_headers(id_token), json=signed_body(device, key)
     )
-    if status == 404 or error_of(body) in DEVICE_GONE:
+    if error_of(body) in DEVICE_GONE:
         raise PostiAuthError(f"The device is no longer trusted, it has been deactivated in OmaPosti ({error_of(body)})")
+    # A login too old to renew with is refused the same way, and only a new login helps. A 404 without one of the codes
+    # above is no sign of a removed device: an endpoint that moved shouldn't send anyone to their bank.
+    if status in (401, 403):
+        raise PostiAuthError(f"Posti refused to renew the login (status {status}): {error_of(body)}")
     trust_token = body.get("device_trust_token")
     vault = body.get("vault_data")
     if status not in (200, 201) or not isinstance(trust_token, str) or not isinstance(vault, str):
@@ -184,6 +188,8 @@ async def refresh(session: aiohttp.ClientSession, device: Device, id_token: str)
         # The vault key is base64 and is sent as it is, unencoded, like the app sends it.
         data=f"refresh_token={vault_key(key, vault)}&device_trust_token={trust_token}",
     )
+    if error_of(fresh) == "invalid_grant":
+        raise PostiAuthError("Posti no longer accepts the device's renewal, so a new login is needed")
     if "error" in fresh or not fresh.get("id_token"):
         raise PostiError(f"Posti didn't renew the tokens: {error_of(fresh)}")
     return fresh

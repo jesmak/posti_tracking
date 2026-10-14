@@ -105,7 +105,7 @@ async def test_renewing_the_tokens(hass: HomeAssistant, aioclient_mock: AiohttpC
     [
         (403, {"error": {"code": 403, "message": "INACTIVE_DEVICE", "translations": {"en": "Not trusted"}}}),
         (404, {"error": {"code": 404, "message": "NO_DEVICE_FOUND"}}),
-        (404, {"error": "not_found"}),
+        (401, {"error": {"code": 401, "message": "UNAUTHORIZED"}}),
     ],
 )
 async def test_a_deactivated_device(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, answer: dict) -> None:
@@ -143,3 +143,24 @@ async def test_a_deactivation_posti_refuses(hass: HomeAssistant, aioclient_mock:
 
     with pytest.raises(PostiError):
         await deactivate(async_get_clientsession(hass), DEVICE, "device-1", ID_TOKEN)
+
+
+async def test_a_404_without_a_device_code_is_no_reason_to_log_in_again(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=404, json={"error": "not_found"})
+
+    with pytest.raises(PostiError) as raised:
+        await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
+    assert not isinstance(raised.value, PostiAuthError), "an endpoint that moved shouldn't send anyone to their bank"
+
+
+async def test_a_renewal_auth_service_no_longer_grants_asks_for_a_new_login(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.post(
+        f"{MFA_URL}/device_refresh",
+        json={"device_trust_token": "trust-1", "vault_data": vault(REFRESH_KEY.encode()), "vault_version": 3},
+    )
+    aioclient_mock.post(f"{AUTH_SERVICE_URL}/device_refresh", status=400, json={"error": "invalid_grant"})
+
+    with pytest.raises(PostiAuthError):
+        await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)

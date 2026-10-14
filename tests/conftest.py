@@ -50,7 +50,7 @@ SETTINGS = {
     "max_shipments": 5,
     "stale_shipment_day_limit": 15,
     "completed_shipment_day_shown": 3,
-    "include_pickup_details": False,
+    "pickup_code": "none",
 }
 # The device is never used for real: the tests replace the renewal that would use its key.
 DEVICE_DATA = {"device_id": "device-1", "private_key": "private key", "salt": "c2FsdA==", "subject": "account-1"}
@@ -77,9 +77,9 @@ def shipment(number: str, phase: str, *events: dict[str, Any], **changes: Any) -
     return {
         "shipmentNumber": f"S-{number}",
         "parties": [
-            {"name": ["Verkkokauppa.com Oyj"], "role": "CONSIGNOR"},
+            {"name": ["Example Shop Oy"], "role": "CONSIGNOR"},
             {"name": ["Matti Meikäläinen"], "role": "CONSIGNEE"},
-            {"name": ["K-Market Keskusta", "Pakettiautomaatti"], "role": "DELIVERY"},
+            {"name": ["Example Market Keskusta", "Pakettiautomaatti"], "role": "DELIVERY"},
         ],
         "departure": {"city": "HELSINKI"},
         "destination": {"city": "LAPPEENRANTA"},

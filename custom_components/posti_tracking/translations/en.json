@@ -27,7 +27,7 @@
           "max_shipments": "Maximum number of packages",
           "stale_shipment_day_limit": "Days until undelivered packages are hidden",
           "completed_shipment_day_shown": "Days until delivered packages are hidden",
-          "include_pickup_details": "Pickup point and code"
+          "pickup_code": "Pickup code"
         },
         "data_description": {
           "language": "Language of the package event descriptions.",
@@ -35,7 +35,7 @@
           "max_shipments": "How many packages the sensor lists.",
           "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
           "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered.",
-          "include_pickup_details": "Add the pickup point and pickup code to package data. Off by default as this is sensitive data."
+          "pickup_code": "A code for collecting the package, and if you like a QR code to show at a service point. Off by default as this is sensitive data."
         }
       },
       "reauth_confirm": {
@@ -51,7 +51,7 @@
           "max_shipments": "Maximum number of packages",
           "stale_shipment_day_limit": "Days until undelivered packages are hidden",
           "completed_shipment_day_shown": "Days until delivered packages are hidden",
-          "include_pickup_details": "Pickup point and code"
+          "pickup_code": "Pickup code"
         },
         "data_description": {
           "language": "Language of the package event descriptions.",
@@ -59,7 +59,7 @@
           "max_shipments": "How many packages the sensor lists.",
           "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
           "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered.",
-          "include_pickup_details": "Add the pickup point and pickup code to package data."
+          "pickup_code": "A code for collecting the package, and if you like a QR code to show at a service point."
         }
       }
     },
@@ -67,7 +67,7 @@
       "invalid_auth": "Posti didn't accept the authentication. Choose a method and try again.",
       "cannot_connect": "Posti couldn't be reached. Try again in a moment.",
       "invalid_address": "The address isn't in the right format. After authenticating, copy the full address from the address bar.",
-      "device_failed": "Posti didn't accept Home Assistant as a device. Log in again.",
+      "device_failed": "Posti didn't accept Home Assistant as a device, or the login had expired. Log in again.",
       "no_account": "Posti's login didn't say which account it is. Log in again."
     },
     "abort": {
@@ -100,6 +100,13 @@
         "htid": "hightrust.id",
         "hst": "ID card"
       }
+    },
+    "pickup_code": {
+      "options": {
+        "none": "Don't add",
+        "code": "Add",
+        "code_and_qr": "Add with a QR code"
+      }
     }
   },
   "entity": {
@@ -126,6 +133,11 @@
       "ready_for_pickup": {
         "name": "Packages ready for pickup"
       }
+    }
+  },
+  "device": {
+    "account": {
+      "name": "Posti ({username})"
     }
   }
 }

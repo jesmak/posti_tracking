@@ -27,7 +27,7 @@ SETTINGS = {
     "max_shipments": 5.0,
     "stale_shipment_day_limit": 15.0,
     "completed_shipment_day_shown": 3.0,
-    "include_pickup_details": False,
+    "pickup_code": "none",
 }
 METHODS = {
     f"telia.ftn.oidc.{provider}.1": f"/uas/authn/session-1/select?method=telia.ftn.oidc.{provider}.1"
@@ -41,7 +41,7 @@ RENEWED = {"id_token": "id-2", "access_token": "access-2", "role_tokens": VALID_
 
 
 def account(hass: HomeAssistant, data: dict[str, Any] = ENTRY_DATA) -> MockConfigEntry:
-    entry = MockConfigEntry(domain=DOMAIN, title=USERNAME, version=1, minor_version=3, unique_id=USERNAME, data=data)
+    entry = MockConfigEntry(domain=DOMAIN, title=USERNAME, version=1, minor_version=4, unique_id=USERNAME, data=data)
     entry.add_to_hass(hass)
     return entry
 
@@ -90,11 +90,13 @@ async def test_adding_an_account(hass: HomeAssistant, omaposti: AiohttpClientMoc
     assert result["step_id"] == "settings"
     assert result["description_placeholders"] == {"account": USERNAME}
     assert strong_login["finish"].call_args.args[2] == RETURN_ADDRESS
+    # Nothing is registered before the settings are in.
+    strong_login["provision"].assert_not_called()
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SETTINGS)
     # The renewed tokens are tried on OmaPosti before anything is saved.
     [(_, _, _, headers)] = omaposti.mock_calls
     assert headers["Authorization"] == "Bearer id-2"
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], SETTINGS)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == USERNAME
     assert result["result"].unique_id == USERNAME
@@ -105,7 +107,7 @@ async def test_adding_an_account(hass: HomeAssistant, omaposti: AiohttpClientMoc
         "max_shipments": 5,
         "stale_shipment_day_limit": 15,
         "completed_shipment_day_shown": 3,
-        "include_pickup_details": False,
+        "pickup_code": "none",
         "device": DEVICE.as_data(),
         "tokens": {**LOGIN_TOKENS, **RENEWED},
     }
@@ -136,8 +138,30 @@ async def test_a_device_posti_refuses(hass: HomeAssistant, strong_login: dict[st
     result = await to_authentication(hass)
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"address": RETURN_ADDRESS})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SETTINGS)
     assert result["step_id"] == "user"
     assert result["errors"] == {"base": "device_failed"}
+    # No device was registered, so there is none to remove.
+    strong_login["deactivate"].assert_not_called()
+
+
+async def test_a_device_that_does_not_work_is_removed_again(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:
+    strong_login["refresh"].side_effect = PostiError("the vault didn't open")
+    result = await to_authentication(hass)
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"address": RETURN_ADDRESS})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SETTINGS)
+    assert result["errors"] == {"base": "device_failed"}
+    assert strong_login["deactivate"].call_args.args[1:3] == (DEVICE, DEVICE.device_id)
+
+
+async def test_closing_the_settings_leaves_no_device_behind(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:
+    result = await to_authentication(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"address": RETURN_ADDRESS})
+    assert result["step_id"] == "settings"
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    strong_login["provision"].assert_not_called()
 
 
 async def test_posti_cannot_be_reached(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:
@@ -233,7 +257,7 @@ async def test_changing_settings(hass: HomeAssistant, strong_login: dict[str, An
             "max_shipments": 10.0,
             "stale_shipment_day_limit": 30.0,
             "completed_shipment_day_shown": 1.0,
-            "include_pickup_details": True,
+            "pickup_code": "code_and_qr",
         },
     )
     await hass.async_block_till_done()
@@ -247,5 +271,5 @@ async def test_changing_settings(hass: HomeAssistant, strong_login: dict[str, An
         "max_shipments": 10,
         "stale_shipment_day_limit": 30,
         "completed_shipment_day_shown": 1,
-        "include_pickup_details": True,
+        "pickup_code": "code_and_qr",
     }

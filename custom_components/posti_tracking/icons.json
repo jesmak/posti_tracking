@@ -1,0 +1,20 @@
+{
+  "entity": {
+    "sensor": {
+      "packages": {
+        "default": "mdi:package"
+      },
+      "on_the_way": {
+        "default": "mdi:package-variant-closed"
+      },
+      "ready_for_pickup": {
+        "default": "mdi:package-down"
+      }
+    },
+    "event": {
+      "package": {
+        "default": "mdi:package-variant"
+      }
+    }
+  }
+}

@@ -100,7 +100,7 @@ async def test_a_package_becoming_ready_for_pickup_fires_an_event(
 
     assert hass.states.get(EVENT_ENTITY).attributes["event_type"] == "ready_for_pickup"
     assert hass.states.get(EVENT_ENTITY).attributes["shipment_number"] == "JJFI0100"
-    assert hass.states.get(EVENT_ENTITY).attributes["destination"] == "K-Market Keskusta, Pakettiautomaatti"
+    assert hass.states.get(EVENT_ENTITY).attributes["destination"] == "Example Market Keskusta, Pakettiautomaatti"
     assert hass.states.get(READY).state == "1"
     assert [state.attributes.get("event_type") for state in fired if state] == ["ready_for_pickup"]
 
@@ -146,3 +146,48 @@ async def test_every_change_of_one_update_fires_its_own_event(
     await hass.async_block_till_done()
 
     assert seen == ["ready_for_pickup", "delivered"], "one event for each package that changed"
+
+
+async def failure(method: str, url: str) -> AiohttpClientMockResponse:
+    return AiohttpClientMockResponse(method, url, status=503)
+
+
+async def test_an_event_after_a_failed_update_does_not_come_from_unavailable(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
+) -> None:
+    current = [shipment("JJFI0500", "IN_TRANSPORT", event("2026-09-16T05:30:00Z", "Kuljetuksessa", "In transport"))]
+    down = False
+    aioclient_mock.post(GRAPH_API_URL, side_effect=lambda *_: failure("post", GRAPH_API_URL) if down else answer(current))
+    await set_up(hass, freezer)
+
+    down = True
+    freezer.tick(timedelta(minutes=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get(EVENT_ENTITY).state == "unavailable"
+
+    writes: list[tuple[str, str | None]] = []
+    hass.bus.async_listen(
+        "state_changed",
+        lambda call: (
+            writes.append((call.data["old_state"].state, call.data["new_state"].attributes.get("event_type")))
+            if call.data["entity_id"] == EVENT_ENTITY
+            else None
+        ),
+    )
+    down = False
+    current[:] = [
+        shipment(
+            "JJFI0500",
+            "READY_FOR_PICKUP",
+            event("2026-09-16T05:30:00Z", "Kuljetuksessa", "In transport"),
+            event("2026-09-16T09:30:00Z", "Noudettavissa", "Ready for pickup"),
+        )
+    ]
+    freezer.tick(timedelta(minutes=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    # An automation leaves out a change from unavailable, as the entity coming back, so the event must not be one.
+    [(before, _)] = [write for write in writes if write[1] == "ready_for_pickup"]
+    assert before != "unavailable"

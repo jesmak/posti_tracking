@@ -18,7 +18,6 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.posti_tracking.const import DOMAIN, GRAPH_API_URL
 from custom_components.posti_tracking.device import Device
 from custom_components.posti_tracking.exceptions import PostiAuthError, PostiError
-from custom_components.posti_tracking.sensor import PostiSensor
 
 from .conftest import ENTRY_DATA, EXPIRED_TOKENS, NOW, PASSWORD_ENTRY_DATA, SHIPMENTS, USERNAME, VALID_TOKENS, answers
 
@@ -28,7 +27,7 @@ ENTITY_ID = "sensor.posti_matti_meikalainen_example_com"
 def account(
     hass: HomeAssistant,
     *,
-    minor_version: int = 3,
+    minor_version: int = 4,
     unique_id: str | None = USERNAME,
     data: dict[str, Any] = ENTRY_DATA,
     **changes: object,
@@ -70,30 +69,44 @@ async def test_the_sensor_lists_the_packages(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_packages_are_kept_out_of_the_recorder() -> None:
-    assert "packages" in PostiSensor._unrecorded_attributes
+# An entry from before 1.4, with the switch that held back both the pickup point and the code.
+OLD_ENTRY_DATA = {key: value for key, value in PASSWORD_ENTRY_DATA.items() if key != "pickup_code"} | {"include_pickup_details": False}
 
 
 async def test_an_entry_of_1_x_gets_a_unique_id(hass: HomeAssistant) -> None:
-    entry = account(hass, minor_version=1, unique_id=None, data=PASSWORD_ENTRY_DATA | {"username": "Matti.Meikalainen@example.com"})
+    entry = account(hass, minor_version=1, unique_id=None, data=OLD_ENTRY_DATA | {"username": "Matti.Meikalainen@example.com"})
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert (entry.minor_version, entry.unique_id) == (3, USERNAME)
+    assert (entry.minor_version, entry.unique_id) == (4, USERNAME)
     assert "password" not in entry.data
 
 
 async def test_the_password_of_an_entry_of_2_x_is_dropped(hass: HomeAssistant) -> None:
-    entry = account(hass, minor_version=2, data=PASSWORD_ENTRY_DATA)
+    entry = account(hass, minor_version=2, data=OLD_ENTRY_DATA)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.minor_version == 3
-    assert entry.data == {key: value for key, value in PASSWORD_ENTRY_DATA.items() if key != "password"}
+    assert entry.minor_version == 4
+    assert "password" not in entry.data
+
+
+@pytest.mark.parametrize(("switch", "choice"), [(True, "code"), (False, "none"), (None, "none")])
+async def test_the_pickup_switch_of_an_entry_of_3_0_becomes_a_choice(hass: HomeAssistant, switch: bool | None, choice: str) -> None:
+    data = {key: value for key, value in ENTRY_DATA.items() if key != "pickup_code"}
+    if switch is not None:
+        data["include_pickup_details"] = switch
+    entry = account(hass, minor_version=3, data=data)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.minor_version == 4
+    assert entry.data["pickup_code"] == choice
+    assert "include_pickup_details" not in entry.data
 
 
 async def test_a_password_entry_asks_for_a_new_login(hass: HomeAssistant) -> None:
-    entry = account(hass, minor_version=2, data=PASSWORD_ENTRY_DATA)
+    entry = account(hass, minor_version=2, data=OLD_ENTRY_DATA)
     assert not await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -143,18 +156,47 @@ async def test_the_sensor_is_unavailable_while_posti_is_down(
     assert hass.states.get(ENTITY_ID).state == STATE_UNAVAILABLE
 
 
-async def test_removing_an_account_deactivates_its_device(hass: HomeAssistant) -> None:
+async def test_removing_an_account_deactivates_its_device_with_a_fresh_login(hass: HomeAssistant) -> None:
     entry = account(hass)
-    with patch("custom_components.posti_tracking.deactivate") as deactivate:
+    with (
+        patch("custom_components.posti_tracking.refresh", return_value={"id_token": "fresh"}) as refresh,
+        patch("custom_components.posti_tracking.deactivate") as deactivate,
+    ):
         await hass.config_entries.async_remove(entry.entry_id)
 
     device = Device.from_data(ENTRY_DATA["device"])
-    assert deactivate.call_args.args[1:] == (device, device.device_id, VALID_TOKENS["id_token"])
+    assert refresh.call_args.args[1:] == (device, VALID_TOKENS["id_token"])
+    assert deactivate.call_args.args[1:] == (device, device.device_id, "fresh")
+
+
+async def test_removing_falls_back_to_the_saved_login_when_it_cannot_be_renewed(hass: HomeAssistant) -> None:
+    entry = account(hass)
+    with (
+        patch("custom_components.posti_tracking.refresh", side_effect=PostiError("down")),
+        patch("custom_components.posti_tracking.deactivate") as deactivate,
+    ):
+        await hass.config_entries.async_remove(entry.entry_id)
+
+    assert deactivate.call_args.args[3] == VALID_TOKENS["id_token"]
+
+
+async def test_a_device_posti_no_longer_trusts_needs_no_deactivation(hass: HomeAssistant) -> None:
+    entry = account(hass)
+    with (
+        patch("custom_components.posti_tracking.refresh", side_effect=PostiAuthError("gone")),
+        patch("custom_components.posti_tracking.deactivate") as deactivate,
+    ):
+        await hass.config_entries.async_remove(entry.entry_id)
+
+    deactivate.assert_not_called()
 
 
 async def test_a_device_that_cannot_be_deactivated_is_left_to_the_user(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
     entry = account(hass)
-    with patch("custom_components.posti_tracking.deactivate", side_effect=PostiError("Posti couldn't be reached")):
+    with (
+        patch("custom_components.posti_tracking.refresh", return_value={"id_token": "fresh"}),
+        patch("custom_components.posti_tracking.deactivate", side_effect=PostiError("Posti couldn't be reached")),
+    ):
         await hass.config_entries.async_remove(entry.entry_id)
 
     assert hass.config_entries.async_get_entry(entry.entry_id) is None

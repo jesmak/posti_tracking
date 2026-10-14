@@ -11,6 +11,7 @@ steps. Settings are changed by reconfiguring.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -38,23 +39,24 @@ from .const import (
     CONF_ADDRESS,
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
     CONF_DEVICE,
-    CONF_INCLUDE_PICKUP_DETAILS,
     CONF_LANGUAGE,
     CONF_MAX_SHIPMENTS,
     CONF_METHOD,
     CONF_PASSWORD,
+    CONF_PICKUP_CODE,
     CONF_PRIORITIZE_UNDELIVERED,
     CONF_STALE_SHIPMENT_DAY_LIMIT,
     CONF_TOKENS,
     CONF_USERNAME,
     DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
-    DEFAULT_INCLUDE_PICKUP_DETAILS,
     DEFAULT_MAX_SHIPMENTS,
+    DEFAULT_PICKUP_CODE,
     DEFAULT_PRIORITIZE_UNDELIVERED,
     DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
     DOMAIN,
     LANGUAGES,
     METHOD_ORDER,
+    PICKUP_CODE_OPTIONS,
     UAS_HOST,
 )
 from .device import Device, deactivate, jwt_payload, provision, refresh
@@ -71,7 +73,9 @@ SETTING_FIELDS = {
     vol.Required(CONF_MAX_SHIPMENTS): NumberSelector(NumberSelectorConfig(min=1, max=50, step=1, mode=NumberSelectorMode.BOX)),
     vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT): DAYS_SELECTOR,
     vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN): DAYS_SELECTOR,
-    vol.Required(CONF_INCLUDE_PICKUP_DETAILS): BooleanSelector(),
+    vol.Required(CONF_PICKUP_CODE): SelectSelector(
+        SelectSelectorConfig(options=PICKUP_CODE_OPTIONS, translation_key=CONF_PICKUP_CODE, mode=SelectSelectorMode.DROPDOWN)
+    ),
 }
 
 SETTINGS_SCHEMA = vol.Schema(SETTING_FIELDS)
@@ -79,12 +83,13 @@ ADDRESS_SCHEMA = vol.Schema({vol.Required(CONF_ADDRESS): TextSelector(TextSelect
 # Home Assistant doesn't allow addresses in translations, so they come in as placeholders.
 RETURN_ADDRESS_EXAMPLE = f"https://{UAS_HOST}/uas/return/…"
 SECURITY_URL = "https://github.com/jesmak/posti_tracking#security"
+_LOGGER = logging.getLogger(__name__)
 METHOD_ID = re.compile(r"telia\.ftn\.oidc\.([a-z0-9_]+)\.1")
 
 
 def clean_settings(user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Submitted settings, normalised for storing."""
-    data = {key: user_input[key] for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED, CONF_INCLUDE_PICKUP_DETAILS) if key in user_input}
+    data = {key: user_input[key] for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED, CONF_PICKUP_CODE) if key in user_input}
     for key in (CONF_MAX_SHIPMENTS, CONF_STALE_SHIPMENT_DAY_LIMIT, CONF_COMPLETED_SHIPMENT_DAYS_SHOWN):
         if key in user_input:
             data[key] = int(user_input[key])
@@ -115,9 +120,10 @@ def account_email(tokens: Mapping[str, Any]) -> str | None:
 
 
 class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
-    # 1.1 entries have no unique id, and 1.2 entries a password; __init__.async_migrate_entry fixes both.
+    # 1.1 entries have no unique id, 1.2 entries a password, and 1.3 entries the old pickup switch.
+    # __init__.async_migrate_entry updates them all.
     VERSION = 1
-    MINOR_VERSION = 3
+    MINOR_VERSION = 4
 
     def __init__(self) -> None:
         # One login's HTTP session: its cookies must last from choosing the method to finishing the login.
@@ -126,6 +132,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._choices: dict[str, str] = {}
         self._bank_address = ""
         self._account: dict[str, Any] = {}
+        # The tokens of a finished login, kept until the settings are in. Only then is a device registered with them.
+        self._login_tokens: dict[str, Any] = {}
 
     @callback
     def async_remove(self) -> None:
@@ -200,7 +208,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _register_device(self, tokens: dict[str, Any]) -> ConfigFlowResult:
-        """Registers the integration as a device of the account, and checks that the device renews the tokens."""
+        """Checks the account of a finished login. A new one goes on to its settings, and a login again gets its device."""
         email = account_email(tokens)
         if email is None:
             return await self._show_methods({"base": "no_account"})
@@ -208,45 +216,73 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             # Checked before registering a device, so that another account isn't left with one.
             if email.lower() != self._get_reauth_entry().unique_id:
                 return self.async_abort(reason="wrong_account")
-        else:
-            await self.async_set_unique_id(email.lower())
-            self._abort_if_unique_id_configured()
+            registered = await self._provision(tokens)
+            if registered is None:
+                return await self._show_methods({"base": "device_failed"})
+            entry = self._get_reauth_entry()
+            data = {key: value for key, value in entry.data.items() if key != CONF_PASSWORD}
+            return self.async_update_reload_and_abort(entry, data={**data, CONF_DEVICE: registered[0], CONF_TOKENS: registered[1]})
 
+        await self.async_set_unique_id(email.lower())
+        self._abort_if_unique_id_configured()
+        # The device is registered only once the settings are in, so closing the dialog here leaves nothing behind in
+        # the account.
+        self._account = {"title": email}
+        self._login_tokens = tokens
+        return await self.async_step_settings()
+
+    async def _provision(self, tokens: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        """Registers the integration as a device of the account, and checks that it renews the tokens and reads the
+        packages. Returns the device and its tokens, or None when that failed: a device that didn't work is removed
+        again, so that the account isn't left with one nobody holds the key to."""
         session = self._http()
+        device: Device | None = None
         try:
             device, tokens = await provision(session, tokens)
             tokens = {**tokens, **await refresh(session, device, tokens["id_token"])}
             shipments_in(*await query_shipments(session, tokens))
-            if self.source == SOURCE_REAUTH and CONF_DEVICE in self._get_reauth_entry().data:
-                old_device = Device.from_data(self._get_reauth_entry().data[CONF_DEVICE])
+        except PostiError as err:
+            if device is not None:
                 try:
-                    await deactivate(session, device, old_device.device_id, tokens["id_token"])
-                except PostiError:
-                    # Usually it is gone already: Posti no longer trusting it is what starts reauthentication.
-                    pass
-        except PostiError:
-            # A login registers only one device, so trying again needs a new login.
-            return await self._show_methods({"base": "device_failed"})
-        finally:
-            self._end_session()
+                    await deactivate(session, device, device.device_id, tokens["id_token"])
+                except PostiError as cleanup:
+                    _LOGGER.warning(
+                        "A device was registered for the account but didn't work, and couldn't be removed again (%s). "
+                        "Remove the extra Home Assistant in the OmaPosti app under More, Settings, Security settings",
+                        cleanup,
+                    )
+            _LOGGER.debug("Registering the device failed: %s", err)
+            return None
 
-        if self.source == SOURCE_REAUTH:
-            entry = self._get_reauth_entry()
-            data = {key: value for key, value in entry.data.items() if key != CONF_PASSWORD}
-            return self.async_update_reload_and_abort(entry, data={**data, CONF_DEVICE: device.as_data(), CONF_TOKENS: tokens})
-        self._account = {"title": email, CONF_DEVICE: device.as_data(), CONF_TOKENS: tokens}
-        return await self.async_step_settings()
+        if self.source == SOURCE_REAUTH and CONF_DEVICE in self._get_reauth_entry().data:
+            old_device = Device.from_data(self._get_reauth_entry().data[CONF_DEVICE])
+            try:
+                await deactivate(session, device, old_device.device_id, tokens["id_token"])
+            except PostiError as err:
+                # Usually it is gone already, as Posti no longer trusting it is what starts a login again. When it
+                # isn't, its key is still in the backups, so the user has to know.
+                _LOGGER.warning(
+                    "Home Assistant couldn't remove its previous device from the account's trusted devices (%s). If "
+                    "OmaPosti still lists two, remove the older one under More, Settings, Security settings",
+                    err,
+                )
+        self._end_session()
+        return device.as_data(), tokens
 
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
+            registered = await self._provision(self._login_tokens)
+            if registered is None:
+                # A login registers only one device, so trying again needs a new login.
+                return await self._show_methods({"base": "device_failed"})
             return self.async_create_entry(
                 title=self._account["title"],
                 data={
                     # The sensor and event entities are named after it, as in earlier versions.
                     CONF_USERNAME: self._account["title"],
                     **clean_settings(user_input),
-                    CONF_DEVICE: self._account[CONF_DEVICE],
-                    CONF_TOKENS: self._account[CONF_TOKENS],
+                    CONF_DEVICE: registered[0],
+                    CONF_TOKENS: registered[1],
                 },
             )
         return self.async_show_form(
@@ -263,7 +299,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             CONF_MAX_SHIPMENTS: DEFAULT_MAX_SHIPMENTS,
             CONF_STALE_SHIPMENT_DAY_LIMIT: DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
             CONF_COMPLETED_SHIPMENT_DAYS_SHOWN: DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
-            CONF_INCLUDE_PICKUP_DETAILS: DEFAULT_INCLUDE_PICKUP_DETAILS,
+            CONF_PICKUP_CODE: DEFAULT_PICKUP_CODE,
         }
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:

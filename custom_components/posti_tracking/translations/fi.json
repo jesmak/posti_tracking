@@ -27,7 +27,7 @@
           "max_shipments": "Pakettien enimmäismäärä",
           "stale_shipment_day_limit": "Päiviä, kunnes toimittamaton paketti piilotetaan",
           "completed_shipment_day_shown": "Päiviä, kunnes toimitettu paketti piilotetaan",
-          "include_pickup_details": "Noutopiste ja koodi"
+          "pickup_code": "Noutokoodi"
         },
         "data_description": {
           "language": "Kieli, jolla pakettien tapahtumat kuvataan.",
@@ -35,7 +35,7 @@
           "max_shipments": "Kuinka monta pakettia sensori listaa.",
           "stale_shipment_day_limit": "Lasketaan paketin viimeisimmästä tapahtumasta. Jotkin paketit jäävät jakeluun pysyvästi.",
           "completed_shipment_day_shown": "Lasketaan toimituksesta. Lähettäjälle palautetut paketit lasketaan toimitetuiksi.",
-          "include_pickup_details": "Lisää pakettien tietoihin noutopisteen ja automaatin avauskoodi. Oletuksena pois päältä, koska tieto on arkaluontoista."
+          "pickup_code": "Koodi paketin noutamista varten, ja halutessasi QR-koodi palvelupisteessä näytettäväksi. Oletuksena pois päältä, koska tieto on arkaluontoista."
         }
       },
       "reauth_confirm": {
@@ -51,7 +51,7 @@
           "max_shipments": "Pakettien enimmäismäärä",
           "stale_shipment_day_limit": "Päiviä, kunnes toimittamaton paketti piilotetaan",
           "completed_shipment_day_shown": "Päiviä, kunnes toimitettu paketti piilotetaan",
-          "include_pickup_details": "Noutopiste ja koodi"
+          "pickup_code": "Noutokoodi"
         },
         "data_description": {
           "language": "Kieli, jolla pakettien tapahtumat kuvataan.",
@@ -59,7 +59,7 @@
           "max_shipments": "Kuinka monta pakettia sensori listaa.",
           "stale_shipment_day_limit": "Lasketaan paketin viimeisimmästä tapahtumasta. Jotkin paketit jäävät jakeluun pysyvästi.",
           "completed_shipment_day_shown": "Lasketaan toimituksesta. Lähettäjälle palautetut paketit lasketaan toimitetuiksi.",
-          "include_pickup_details": "Lisää pakettien tietoihin noutopisteen ja automaatin avauskoodi."
+          "pickup_code": "Koodi paketin noutamista varten, ja halutessasi QR-koodi palvelupisteessä näytettäväksi."
         }
       }
     },
@@ -67,7 +67,7 @@
       "invalid_auth": "Posti ei hyväksynyt tunnistautumista. Valitse tunnistustapa ja yritä uudelleen.",
       "cannot_connect": "Postiin ei saatu yhteyttä. Yritä hetken kuluttua uudelleen.",
       "invalid_address": "Osoite ei ole oikeassa muodossa. Kopioi tunnistautumisen jälkeen koko osoite osoiteriviltä.",
-      "device_failed": "Posti ei hyväksynyt Home Assistantia laitteeksi. Kirjaudu uudelleen.",
+      "device_failed": "Posti ei hyväksynyt Home Assistantia laitteeksi, tai kirjautuminen ehti vanhentua. Kirjaudu uudelleen.",
       "no_account": "Postin kirjautuminen ei kertonut, mikä tili on kyseessä. Kirjaudu uudelleen."
     },
     "abort": {
@@ -100,6 +100,13 @@
         "htid": "hightrust.id",
         "hst": "Henkilökortti"
       }
+    },
+    "pickup_code": {
+      "options": {
+        "none": "Ei lisätä",
+        "code": "Lisätään",
+        "code_and_qr": "Lisätään QR-koodin kanssa"
+      }
     }
   },
   "entity": {
@@ -126,6 +133,11 @@
       "ready_for_pickup": {
         "name": "Paketteja noudettavissa"
       }
+    }
+  },
+  "device": {
+    "account": {
+      "name": "Posti ({username})"
     }
   }
 }

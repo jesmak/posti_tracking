@@ -14,15 +14,18 @@ from urllib.parse import quote
 
 from .const import (
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
-    CONF_INCLUDE_PICKUP_DETAILS,
     CONF_MAX_SHIPMENTS,
+    CONF_PICKUP_CODE,
     CONF_PRIORITIZE_UNDELIVERED,
     CONF_STALE_SHIPMENT_DAY_LIMIT,
     DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
-    DEFAULT_INCLUDE_PICKUP_DETAILS,
     DEFAULT_MAX_SHIPMENTS,
+    DEFAULT_PICKUP_CODE,
     DEFAULT_PRIORITIZE_UNDELIVERED,
     DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
+    PICKUP_CODE_CODE,
+    PICKUP_CODE_CODE_AND_QR,
+    QR_POINT_TYPES,
     TRACKING_URL,
 )
 
@@ -56,8 +59,9 @@ class PackageSettings:
     # Unfinished packages whose latest event is older are hidden: some stay "in delivery" for good.
     stale_shipment_day_limit: int
     completed_shipment_days_shown: int
-    # The pickup point and the code that opens the locker, which not everyone wants on a dashboard.
-    include_pickup_details: bool
+    # none, code or code_and_qr: the code opens the locker or collects the package, which not everyone wants on a
+    # dashboard. The pickup point itself is always included.
+    pickup_code: str
 
     @classmethod
     def from_data(cls, data: Mapping[str, Any]) -> PackageSettings:
@@ -66,7 +70,7 @@ class PackageSettings:
             max_shipments=int(data.get(CONF_MAX_SHIPMENTS, DEFAULT_MAX_SHIPMENTS)),
             stale_shipment_day_limit=int(data.get(CONF_STALE_SHIPMENT_DAY_LIMIT, DEFAULT_STALE_SHIPMENT_DAY_LIMIT)),
             completed_shipment_days_shown=int(data.get(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN, DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN)),
-            include_pickup_details=bool(data.get(CONF_INCLUDE_PICKUP_DETAILS, DEFAULT_INCLUDE_PICKUP_DETAILS)),
+            pickup_code=str(data.get(CONF_PICKUP_CODE, DEFAULT_PICKUP_CODE)),
         )
 
 
@@ -74,7 +78,12 @@ class PackageSettings:
 class Packages:
     # When a shipment of the account last changed, hidden ones included. None when there are none.
     latest_change: datetime | None
+    # The packages to list, newest first and at most the maximum.
     packages: list[dict[str, Any]]
+    # Every package within the age limits, however many: the counts.
+    current: list[dict[str, Any]]
+    # Every package of the account: what happens to them, also outside the list.
+    every: list[dict[str, Any]]
 
 
 def map_raw_status(phase: Any) -> int:
@@ -88,30 +97,51 @@ def build_packages(shipments: Iterable[Mapping[str, Any]], settings: PackageSett
     unfinished: list[tuple[datetime, dict[str, Any]]] = []
     finished: list[tuple[datetime, dict[str, Any]]] = []
 
+    newest: dict[str, tuple[datetime, dict[str, Any]]] = {}
     for shipment in shipments:
-        events = shipment.get("events")
-        if not isinstance(events, list) or not events or not isinstance(events[-1], Mapping):
+        found = newest_event(shipment.get("events"))
+        if found is None:
             continue
-        event = events[-1]
-        changed = parse_time(event.get("timestamp"))
-        if changed is None:
-            continue
+        event, changed = found
         if latest_change is None or changed > latest_change:
             latest_change = changed
 
         status = map_raw_status(shipment.get("shipmentPhase"))
+        keep_newest(newest, changed, package(shipment, event, status, language, settings))
+
+    every = [item for _, item in newest.values()]
+    for changed, item in newest.values():
+        status = item["status"]
         age_days = (now - changed).days
         if status not in FINISHED and age_days <= settings.stale_shipment_day_limit:
-            unfinished.append((changed, package(shipment, event, status, language, settings)))
+            unfinished.append((changed, item))
         elif status in FINISHED and age_days <= settings.completed_shipment_days_shown:
-            finished.append((changed, package(shipment, event, status, language, settings)))
+            finished.append((changed, item))
 
     unfinished.sort(key=change_time, reverse=True)
     finished.sort(key=change_time, reverse=True)
     ordered = unfinished + finished
     if not settings.prioritize_undelivered:
         ordered.sort(key=change_time, reverse=True)
-    return Packages(latest_change, [item for _, item in ordered[: settings.max_shipments]])
+    current = [item for _, item in ordered]
+    return Packages(latest_change, current[: settings.max_shipments], current, every)
+
+
+def newest_event(events: Any) -> tuple[Mapping[str, Any], datetime] | None:
+    """The latest event of a shipment and its time, by the time rather than the order Posti happens to send them in."""
+    timed = [(event, parse_time(event.get("timestamp"))) for event in events or [] if isinstance(event, Mapping)]
+    timed = [(event, time) for event, time in timed if time is not None]
+    return max(timed, key=lambda pair: pair[1]) if timed else None
+
+
+def keep_newest(newest: dict[str, tuple[datetime, dict[str, Any]]], changed: datetime, item: dict[str, Any]) -> None:
+    """Keeps a package by its number, the newest copy when the account lists one twice. One without a number is left out,
+    since nothing would tell its updates apart from another's."""
+    number = item.get("shipment_number")
+    if not number:
+        return
+    if number not in newest or changed > newest[number][0]:
+        newest[number] = (changed, item)
 
 
 def change_time(item: tuple[datetime, dict[str, Any]]) -> datetime:
@@ -130,6 +160,9 @@ def package(
     tracking_numbers = shipment.get("trackingNumbers") or []
     point = shipment.get("pickupPoint") if isinstance(shipment.get("pickupPoint"), Mapping) else {}
     shipment_number = (tracking_numbers[0] if tracking_numbers else None) or shipment.get("shipmentNumber")
+    # Only a setting that asks for the code shows it: an unknown value keeps it out, as the code is a secret.
+    with_code = settings.pickup_code in (PICKUP_CODE_CODE, PICKUP_CODE_CODE_AND_QR)
+    code = pickup_code(point) if with_code else None
     return {
         "origin": party_name(parties, "CONSIGNOR"),
         "origin_city": city(shipment.get("departure")),
@@ -149,21 +182,22 @@ def package(
         "pickup_deadline": None,
         "weight": number(shipment.get("grossWeight")),
         "package_count": whole_number(shipment.get("packageQuantity")),
-        "pickup_point": pickup_point(point) if settings.include_pickup_details else None,
-        "pickup_code": pickup_code(point) if settings.include_pickup_details else None,
+        "pickup_point": pickup_point(point, with_door=with_code),
+        "pickup_code": code,
+        "pickup_qr": pickup_qr(point) if settings.pickup_code == PICKUP_CODE_CODE_AND_QR else None,
         "source": "Posti",
         "tracking_url": tracking_url(shipment_number),
     }
 
 
-def pickup_point(point: Mapping[str, Any]) -> dict[str, Any] | None:
-    """Where the package is picked up: the locker or counter, with its address."""
+def pickup_point(point: Mapping[str, Any], *, with_door: bool) -> dict[str, Any] | None:
+    """Where the package is picked up: the locker or counter, with its address. The locker door goes with the code."""
     location = point.get("location") if isinstance(point.get("location"), Mapping) else {}
     found = {
         "name": point.get("lockerAddress"),
         # The door the package is behind, at lockers with a keypad on every door. Posti flags when it is worth showing:
         # the ID of a package kept at a counter isn't.
-        "compartment": point.get("lockerID") if point.get("showLockerID") is True else None,
+        "compartment": point.get("lockerID") if with_door and point.get("showLockerID") is True else None,
         "street": location.get("street1"),
         "postal_code": location.get("postCode"),
         "city": location.get("city"),
@@ -177,6 +211,14 @@ def pickup_code(point: Mapping[str, Any]) -> str | None:
     """The code that opens the locker, or the one given at a counter."""
     code = point.get("lockerCode") or point.get("pupCode")
     return str(code) if code else None
+
+
+def pickup_qr(point: Mapping[str, Any]) -> str | None:
+    """What a QR code for the counter holds: the counter's plain pickup code, at the pickup points that scan one.
+
+    It is the pupCode on purpose: a counter takes that code, not a locker's even if Posti were to send both."""
+    code = point.get("pupCode")
+    return str(code) if code and point.get("type") in QR_POINT_TYPES else None
 
 
 def number(value: Any) -> float | None:

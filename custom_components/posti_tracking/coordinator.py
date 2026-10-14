@@ -8,11 +8,12 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import PostiClient
-from .const import CONF_DEVICE, CONF_LANGUAGE, CONF_TOKENS, DOMAIN, UPDATE_INTERVAL
+from .const import CONF_DEVICE, CONF_LANGUAGE, CONF_TOKENS, CONF_USERNAME, DOMAIN, UPDATE_INTERVAL
 from .device import Device
 from .exceptions import PostiAuthError, PostiError
 from .shipments import Packages, PackageSettings, build_packages
@@ -30,12 +31,25 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
             hass,
             _LOGGER,
             config_entry=entry,
-            name=f"{DOMAIN} {entry.title}",
+            # Not the title, which is the account's email, so the integration's own update errors don't name the account
+            # in logs that end up in bug reports. Home Assistant still logs the title itself when setting up.
+            name=DOMAIN,
             update_interval=UPDATE_INTERVAL,
         )
         self.settings = PackageSettings.from_data(entry.data)
         self.language = entry.data[CONF_LANGUAGE]
         self.client = PostiClient(hass, Device.from_data(entry.data[CONF_DEVICE]), entry.data[CONF_TOKENS], self._save_tokens)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """The account as a device, which all of its entities belong to."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.config_entry.entry_id)},
+            translation_key="account",
+            translation_placeholders={"username": self.config_entry.data[CONF_USERNAME]},
+            manufacturer="Posti",
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
     @callback
     def _save_tokens(self, tokens: dict[str, Any]) -> None:
