@@ -4,8 +4,8 @@ Home Assistant integration that follows the packages of an OmaPosti account.
 
 [![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![HACS][hacs-shield]][hacs] [![License][license-shield]](LICENSE)
 
-<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-light.png#gh-light-mode-only" width="560" alt="A dashboard with the counts of packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code, one on its way and one delivered">
-<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-dark.png#gh-dark-mode-only" width="560" alt="A dashboard with the counts of packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code, one on its way and one delivered">
+<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-light.png#gh-light-mode-only" width="560" alt="A dashboard with the counts of packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one on its way and one delivered">
+<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-dark.png#gh-dark-mode-only" width="560" alt="A dashboard with the counts of packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one on its way and one delivered">
 
 ## What is it?
 
