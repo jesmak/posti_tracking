@@ -4,18 +4,18 @@ Home Assistant integration that follows the packages of an OmaPosti account.
 
 [![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![HACS][hacs-shield]][hacs] [![License][license-shield]](LICENSE)
 
-<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-light.png#gh-light-mode-only" width="560" alt="A dashboard with the counts of packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one on its way and one delivered">
-<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-dark.png#gh-dark-mode-only" width="560" alt="A dashboard with the counts of packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one on its way and one delivered">
+<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-light.png#gh-light-mode-only" width="560" alt="A dashboard with the counts of incoming packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one sent to someone else, one on its way and one delivered, each marked incoming or sent">
+<img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-dark.png#gh-dark-mode-only" width="560" alt="A dashboard with the counts of incoming packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one sent to someone else, one on its way and one delivered, each marked incoming or sent">
 
 ## What is it?
 
 A custom component that lists the coming and recently delivered packages of an [OmaPosti](https://oma.posti.fi/)
-account. There's no need to add packages by hand. The list comes from the packages in your account, and it's updated
-every 10 minutes.
+account, and those sent from it, telling the two apart. There's no need to add packages by hand. The list comes from the
+packages in your account, and it's updated every 10 minutes.
 
 The sensor lists the packages in the format [package-tracker-card](https://github.com/jesmak/package-tracker-card)
 reads, so the card can show them together with packages from other tracking integrations. Four more sensors count the
-packages, and an event entity fires when one of them moves along.
+packages coming to you and those you have sent, and an event entity fires when one of them moves along.
 
 This is an unofficial integration. See [Data](#data) for what that means.
 

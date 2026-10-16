@@ -12,6 +12,7 @@
                     {
                         "origin": "Example Shop",
                         "origin_city": null,
+                        "recipient": null,
                         "destination": "Example Market Kaleva",
                         "destination_city": "TAMPERE",
                         "shipment_number": "JJFI00010000000000011",
@@ -44,6 +45,7 @@
                     {
                         "origin": "Example Books",
                         "origin_city": null,
+                        "recipient": null,
                         "destination": "Parcel locker, Example Centre Hervanta",
                         "destination_city": "TAMPERE",
                         "shipment_number": "JJFI00010000000000022",
@@ -74,8 +76,42 @@
                         "tracking_url": "https://www.posti.fi/fi/seuranta#/lahetys/JJFI00010000000000022"
                     },
                     {
+                        "origin": null,
+                        "origin_city": null,
+                        "recipient": "Maija Mallikas",
+                        "destination": "Example Kiosk Toppila",
+                        "destination_city": "OULU",
+                        "shipment_number": "JJFI00010000000000044",
+                        "shipment_date": null,
+                        "status": 3,
+                        "direction": "outgoing",
+                        "raw_status": "IN_TRANSPORT",
+                        "latest_event": "The shipment is on its way to the destination",
+                        "latest_event_city": "TAMPERE",
+                        "latest_event_country": null,
+                        "latest_event_date": "2026-10-14T04:30:00Z",
+                        "estimated_delivery": "2026-10-15T12:00:00Z",
+                        "pickup_deadline": null,
+                        "weight": 1.2,
+                        "package_count": 1,
+                        "pickup_point": {
+                            "name": "Example Kiosk Toppila",
+                            "compartment": null,
+                            "street": "Esimerkkikatu 12",
+                            "postal_code": "90150",
+                            "city": "OULU",
+                            "type": "POSTI_SERVICE_POINT",
+                            "available": "ma-pe 8.00 - 20.00, la 10.00 - 16.00"
+                        },
+                        "pickup_code": null,
+                        "pickup_qr": null,
+                        "source": "Posti",
+                        "tracking_url": "https://www.posti.fi/fi/seuranta#/lahetys/JJFI00010000000000044"
+                    },
+                    {
                         "origin": "Example Outdoor Gear",
                         "origin_city": null,
+                        "recipient": null,
                         "destination": "Matti Meikäläinen",
                         "destination_city": "TAMPERE",
                         "shipment_number": "JJFI00010000000000033",
