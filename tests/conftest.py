@@ -48,6 +48,7 @@ SETTINGS = {
     "language": "fi",
     "prioritize_undelivered": True,
     "max_shipments": 5,
+    "max_outgoing_shipments": 5,
     "stale_shipment_day_limit": 15,
     "completed_shipment_day_shown": 3,
     "pickup_code": "none",
@@ -64,29 +65,24 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Lets Home Assistant load integrations from custom_components/."""
 
 
-def event(timestamp: str, fi: str, en: str, city: str = "LAPPEENRANTA") -> dict[str, Any]:
-    return {
-        "eventDescription": [{"lang": "fi", "value": fi}, {"lang": "en", "value": en}],
-        "eventLocation": {"city": city, "country": "FI"},
-        "timestamp": timestamp,
-    }
+def event(timestamp: str, description: str, city: str = "LAPPEENRANTA") -> dict[str, Any]:
+    """An event, its description in the language the query asked for."""
+    return {"city": city, "eventDescription": description, "timestamp": timestamp}
 
 
-def shipment(number: str, phase: str, *events: dict[str, Any], **changes: Any) -> dict[str, Any]:
-    """A shipment shaped like OmaPosti's: events oldest first, times in UTC."""
+def shipment(number: str, status: str, *events: dict[str, Any], role: str = "RECEIVER", **changes: Any) -> dict[str, Any]:
+    """A shipment shaped like OmaPosti's consumerShipments hits: events oldest first, times in UTC."""
     return {
-        "shipmentNumber": f"S-{number}",
-        "parties": [
-            {"name": ["Example Shop Oy"], "role": "CONSIGNOR"},
-            {"name": ["Matti Meikäläinen"], "role": "CONSIGNEE"},
-            {"name": ["Example Market Keskusta", "Pakettiautomaatti"], "role": "DELIVERY"},
-        ],
-        "departure": {"city": "HELSINKI"},
-        "destination": {"city": "LAPPEENRANTA"},
-        "trackingNumbers": [number],
+        "shipmentId": f"S-{number}",
+        "userRole": role,
+        "displayId": number,
+        # The other party: the sender of a received shipment, the recipient of a sent one.
+        "displayName": "Example Shop Oy",
+        "delivery": {"time": None, "destination": {"name": None, "city": "LAPPEENRANTA"}},
+        "pickupPoint": None,
+        "status": {"main": status},
+        "measurements": None,
         "events": list(events),
-        "shipmentPhase": phase,
-        "savedDateTime": "2026-09-14T06:00:00Z",
     } | changes
 
 
@@ -95,24 +91,29 @@ SHIPMENTS = [
     shipment(
         "JJFI0001",
         "READY_FOR_PICKUP",
-        event("2026-09-14T08:00:00Z", "Lähetys on kuljetuksessa", "The shipment is in transport", "HELSINKI"),
-        event("2026-09-15T07:00:00Z", "Noudettavissa", "Ready for pickup"),
+        event("2026-09-14T08:00:00Z", "Lähetys on kuljetuksessa", "HELSINKI"),
+        event("2026-09-15T07:00:00Z", "Noudettavissa"),
     ),
     # In transport: the latest change of all.
-    shipment("JJFI0002", "IN_TRANSPORT", event("2026-09-16T05:30:00Z", "Kuljetuksessa", "In transport")),
+    shipment("JJFI0002", "IN_TRANSPORT", event("2026-09-16T05:30:00Z", "Kuljetuksessa")),
     # Delivered two days ago.
-    shipment("JJFI0003", "DELIVERED", event("2026-09-14T06:00:00Z", "Toimitettu", "Delivered")),
+    shipment("JJFI0003", "DELIVERED", event("2026-09-14T06:00:00Z", "Toimitettu")),
     # Returned to the sender yesterday: finished, like a delivered one.
-    shipment("JJFI0004", "RETURNED_TO_SENDER", event("2026-09-15T12:00:00Z", "Palautettu", "Returned")),
+    shipment("JJFI0004", "RETURN_DELIVERED", event("2026-09-15T12:00:00Z", "Palautettu")),
     # Delivered six days ago: hidden.
-    shipment("JJFI0005", "DELIVERED", event("2026-09-10T06:00:00Z", "Toimitettu", "Delivered")),
+    shipment("JJFI0005", "DELIVERED", event("2026-09-10T06:00:00Z", "Toimitettu")),
     # Stuck in delivery for weeks: hidden.
-    shipment("JJFI0006", "IN_DELIVERY", event("2026-08-20T06:00:00Z", "Jakelussa", "In delivery")),
+    shipment("JJFI0006", "IN_DELIVERY", event("2026-08-20T06:00:00Z", "Jakelussa")),
     # Only announced, without events: skipped.
     shipment("JJFI0007", "WAITING"),
-    # A phase this integration doesn't know yet.
-    shipment("JJFI0008", "SOMETHING_NEW", event("2026-09-16T04:00:00Z", "Uusi vaihe", "New phase")),
+    # A status this integration doesn't know yet.
+    shipment("JJFI0008", "SOMETHING_NEW", event("2026-09-16T04:00:00Z", "Uusi vaihe")),
 ]
+
+
+def page_of(shipments: list[dict[str, Any]], page: int = 1, pages: int = 1) -> dict[str, Any]:
+    """OmaPosti's answer: one page of the account's shipments."""
+    return {"data": {"consumerShipments": {"page": page, "totalPages": pages, "hits": shipments}}}
 
 
 def answers(*responses: tuple[int, Any]) -> Callable[..., Awaitable[AiohttpClientMockResponse]]:
@@ -129,7 +130,7 @@ def answers(*responses: tuple[int, Any]) -> Callable[..., Awaitable[AiohttpClien
 @pytest.fixture
 def omaposti(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
     """OmaPosti answering with the shipments."""
-    aioclient_mock.post(GRAPH_API_URL, json={"data": {"shipment": SHIPMENTS}})
+    aioclient_mock.post(GRAPH_API_URL, json=page_of(SHIPMENTS))
     return aioclient_mock
 
 

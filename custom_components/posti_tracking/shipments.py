@@ -8,24 +8,25 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
 from .const import (
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    CONF_MAX_OUTGOING_SHIPMENTS,
     CONF_MAX_SHIPMENTS,
     CONF_PICKUP_CODE,
     CONF_PRIORITIZE_UNDELIVERED,
     CONF_STALE_SHIPMENT_DAY_LIMIT,
     DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    DEFAULT_MAX_OUTGOING_SHIPMENTS,
     DEFAULT_MAX_SHIPMENTS,
     DEFAULT_PICKUP_CODE,
     DEFAULT_PRIORITIZE_UNDELIVERED,
     DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
     PICKUP_CODE_CODE,
     PICKUP_CODE_CODE_AND_QR,
-    QR_POINT_TYPES,
     TRACKING_URL,
 )
 
@@ -39,23 +40,57 @@ STATUS_READY_FOR_PICKUP = 5
 STATUS_RETURNED_TO_SENDER = 6
 STATUS_UNKNOWN = 7
 
-STATUS_BY_PHASE = {
+# Posti's status.main. ORDER_RECEIVED is Posti knowing of the shipment before it has it.
+STATUS_BY_MAIN = {
     "WAITING": STATUS_WAITING,
+    "ORDER_RECEIVED": STATUS_WAITING,
     "RECEIVED": STATUS_RECEIVED,
     "IN_TRANSPORT": STATUS_IN_TRANSPORT,
     "IN_DELIVERY": STATUS_IN_DELIVERY,
     "READY_FOR_PICKUP": STATUS_READY_FOR_PICKUP,
-    "RETURNED_TO_SENDER": STATUS_RETURNED_TO_SENDER,
     "DELIVERED": STATUS_DELIVERED,
+}
+# A shipment on its way back to its sender. For a received one that is the end of it. A sent one comes back to the
+# user, so it goes through the statuses again, and its delivery back is its return. While it comes back it is incoming.
+STATUS_BY_RETURN = {
+    "RETURN_WAITING": STATUS_WAITING,
+    "RETURN_IN_TRANSPORT": STATUS_IN_TRANSPORT,
+    "RETURN_READY_FOR_PICKUP": STATUS_READY_FOR_PICKUP,
+    "RETURN_DELIVERED": STATUS_RETURNED_TO_SENDER,
 }
 # Delivered and returned packages are finished: they are hidden after the days for delivered packages.
 FINISHED = frozenset({STATUS_DELIVERED, STATUS_RETURNED_TO_SENDER})
+
+# Which way a package goes, as package-tracker-card reads it, from Posti's userRole.
+DIRECTION_INCOMING = "incoming"
+DIRECTION_OUTGOING = "outgoing"
+DIRECTION_BY_ROLE = {"RECEIVER": DIRECTION_INCOMING, "SENDER": DIRECTION_OUTGOING}
+
+# A locker outdoors, where the number before lockerId's slash is the keypad to type the code on rather than a door.
+LOCKER_OUTDOOR = "LOCKER_OUTDOOR"
+
+# How a package is picked up, from pickupDetails.pickupMethod, as OmaPosti's web app reads it: a code typed in at a
+# locker, a pickup code that is also a QR code, or a QR code of the item at a counter shelf.
+METHOD_LOCKER_CODE = "LOCKER_CODE"
+METHOD_PICKUP_CODE = "PICKUP_CODE"
+METHOD_QR_CODE = "QR_CODE"
+
+# Opening hours as one line, in the integration's languages.
+DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+DAY_NAMES = {
+    "fi": ["ma", "ti", "ke", "to", "pe", "la", "su"],
+    "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+}
+ALL_DAY = "24 h"
+CLOSED = {"fi": "suljettu", "en": "closed"}
 
 
 @dataclass(frozen=True)
 class PackageSettings:
     prioritize_undelivered: bool
+    # The most received and sent packages listed. 0 leaves that direction out of the list, the counts and the events.
     max_shipments: int
+    max_outgoing_shipments: int
     # Unfinished packages whose latest event is older are hidden: some stay "in delivery" for good.
     stale_shipment_day_limit: int
     completed_shipment_days_shown: int
@@ -68,6 +103,7 @@ class PackageSettings:
         return cls(
             prioritize_undelivered=bool(data.get(CONF_PRIORITIZE_UNDELIVERED, DEFAULT_PRIORITIZE_UNDELIVERED)),
             max_shipments=int(data.get(CONF_MAX_SHIPMENTS, DEFAULT_MAX_SHIPMENTS)),
+            max_outgoing_shipments=int(data.get(CONF_MAX_OUTGOING_SHIPMENTS, DEFAULT_MAX_OUTGOING_SHIPMENTS)),
             stale_shipment_day_limit=int(data.get(CONF_STALE_SHIPMENT_DAY_LIMIT, DEFAULT_STALE_SHIPMENT_DAY_LIMIT)),
             completed_shipment_days_shown=int(data.get(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN, DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN)),
             pickup_code=str(data.get(CONF_PICKUP_CODE, DEFAULT_PICKUP_CODE)),
@@ -78,17 +114,24 @@ class PackageSettings:
 class Packages:
     # When a shipment of the account last changed, hidden ones included. None when there are none.
     latest_change: datetime | None
-    # The packages to list, newest first and at most the maximum.
+    # The packages to list, newest first and at most the maximum of each direction.
     packages: list[dict[str, Any]]
     # Every package within the age limits, however many: the counts.
     current: list[dict[str, Any]]
-    # Every package of the account: what happens to them, also outside the list.
-    every: list[dict[str, Any]]
+    # Every package of the account by Posti's shipment id: what happens to them, also outside the list.
+    every: dict[str, dict[str, Any]]
 
 
-def map_raw_status(phase: Any) -> int:
-    """A package status from Posti's shipment phase, such as READY_FOR_PICKUP."""
-    return STATUS_BY_PHASE.get(phase, STATUS_UNKNOWN)
+def map_status(main: Any, direction: str | None) -> int:
+    """A package status from Posti's status.main, such as READY_FOR_PICKUP, as the user sees it."""
+    if main in STATUS_BY_RETURN:
+        return STATUS_BY_RETURN[main] if direction == DIRECTION_OUTGOING else STATUS_RETURNED_TO_SENDER
+    return STATUS_BY_MAIN.get(main, STATUS_UNKNOWN)
+
+
+def limit_of(item: Mapping[str, Any], settings: PackageSettings) -> int:
+    """The most packages of the item's direction listed. One whose direction isn't known goes with the received ones."""
+    return settings.max_outgoing_shipments if item.get("direction") == DIRECTION_OUTGOING else settings.max_shipments
 
 
 def build_packages(shipments: Iterable[Mapping[str, Any]], settings: PackageSettings, language: str, now: datetime) -> Packages:
@@ -103,19 +146,23 @@ def build_packages(shipments: Iterable[Mapping[str, Any]], settings: PackageSett
         if found is None:
             continue
         event, changed = found
+        item = package(shipment, event, language, settings)
+        # A direction whose maximum is 0 is left out altogether: not listed, counted, reported in events or in the time
+        # of the latest change.
+        if limit_of(item, settings) == 0:
+            continue
         if latest_change is None or changed > latest_change:
             latest_change = changed
+        keep_newest(newest, identity(shipment, item), changed, item)
 
-        status = map_raw_status(shipment.get("shipmentPhase"))
-        keep_newest(newest, changed, package(shipment, event, status, language, settings))
-
-    every = [item for _, item in newest.values()]
+    every = {key: item for key, (_, item) in newest.items()}
     for changed, item in newest.values():
         status = item["status"]
-        age_days = (now - changed).days
-        if status not in FINISHED and age_days <= settings.stale_shipment_day_limit:
+        # The limits are whole days of age, so a package two days and an hour old is past a limit of two.
+        age = now - changed
+        if status not in FINISHED and age <= timedelta(days=settings.stale_shipment_day_limit):
             unfinished.append((changed, item))
-        elif status in FINISHED and age_days <= settings.completed_shipment_days_shown:
+        elif status in FINISHED and age <= timedelta(days=settings.completed_shipment_days_shown):
             finished.append((changed, item))
 
     unfinished.sort(key=change_time, reverse=True)
@@ -124,7 +171,15 @@ def build_packages(shipments: Iterable[Mapping[str, Any]], settings: PackageSett
     if not settings.prioritize_undelivered:
         ordered.sort(key=change_time, reverse=True)
     current = [item for _, item in ordered]
-    return Packages(latest_change, current[: settings.max_shipments], current, every)
+    # Each direction up to its own maximum, so many sent packages don't push the received ones off the list.
+    listed: list[dict[str, Any]] = []
+    taken = {False: 0, True: 0}
+    for item in current:
+        sent = item.get("direction") == DIRECTION_OUTGOING
+        if taken[sent] < limit_of(item, settings):
+            taken[sent] += 1
+            listed.append(item)
+    return Packages(latest_change, listed, current, every)
 
 
 def newest_event(events: Any) -> tuple[Mapping[str, Any], datetime] | None:
@@ -134,91 +189,160 @@ def newest_event(events: Any) -> tuple[Mapping[str, Any], datetime] | None:
     return max(timed, key=lambda pair: pair[1]) if timed else None
 
 
-def keep_newest(newest: dict[str, tuple[datetime, dict[str, Any]]], changed: datetime, item: dict[str, Any]) -> None:
-    """Keeps a package by its number, the newest copy when the account lists one twice. One without a number is left out,
+def identity(shipment: Mapping[str, Any], item: Mapping[str, Any]) -> str | None:
+    """What tells a package apart from the others over time: Posti's shipment id, which stays the same when a tracking
+    number is added later and so changes the number shown."""
+    key = shipment.get("shipmentId") or item.get("shipment_number")
+    return str(key) if key else None
+
+
+def keep_newest(newest: dict[str, tuple[datetime, dict[str, Any]]], key: str | None, changed: datetime, item: dict[str, Any]) -> None:
+    """Keeps a package by its key, the newest copy when the account lists one twice. One without a number is left out,
     since nothing would tell its updates apart from another's."""
-    number = item.get("shipment_number")
-    if not number:
+    if not key:
         return
-    if number not in newest or changed > newest[number][0]:
-        newest[number] = (changed, item)
+    if key not in newest or changed > newest[key][0]:
+        newest[key] = (changed, item)
 
 
 def change_time(item: tuple[datetime, dict[str, Any]]) -> datetime:
     return item[0]
 
 
-def package(
-    shipment: Mapping[str, Any],
-    event: Mapping[str, Any],
-    status: int,
-    language: str,
-    settings: PackageSettings,
-) -> dict[str, Any]:
-    parties = [party for party in shipment.get("parties") or [] if isinstance(party, Mapping)]
-    location = event.get("eventLocation") if isinstance(event.get("eventLocation"), Mapping) else {}
-    tracking_numbers = shipment.get("trackingNumbers") or []
-    point = shipment.get("pickupPoint") if isinstance(shipment.get("pickupPoint"), Mapping) else {}
-    shipment_number = (tracking_numbers[0] if tracking_numbers else None) or shipment.get("shipmentNumber")
+def package(shipment: Mapping[str, Any], event: Mapping[str, Any], language: str, settings: PackageSettings) -> dict[str, Any]:
+    main = mapping(shipment.get("status")).get("main")
+    role = DIRECTION_BY_ROLE.get(shipment.get("userRole"))
+    status = map_status(main, role)
+    # A sent shipment coming back is on its way to the user, to be collected like any other.
+    direction = DIRECTION_INCOMING if role == DIRECTION_OUTGOING and main in STATUS_BY_RETURN else role
+    sent = direction == DIRECTION_OUTGOING
+    point = mapping(shipment.get("pickupPoint"))
+    address = mapping(point.get("address"))
+    delivery = mapping(shipment.get("delivery"))
+    destination = mapping(delivery.get("destination"))
+    measurements = mapping(shipment.get("measurements"))
+    shipment_number = shipment.get("displayId") or shipment.get("shipmentId")
+    # displayName is the other party: the sender of a received shipment, the recipient of a sent one.
+    other = text(shipment.get("displayName"))
     # Only a setting that asks for the code shows it: an unknown value keeps it out, as the code is a secret.
     with_code = settings.pickup_code in (PICKUP_CODE_CODE, PICKUP_CODE_CODE_AND_QR)
-    code = pickup_code(point) if with_code else None
+    details = mapping(point.get("pickupDetails"))
     return {
-        "origin": party_name(parties, "CONSIGNOR"),
-        "origin_city": city(shipment.get("departure")),
-        # The pickup point when there is one, otherwise the receiver.
-        "destination": party_name(parties, "DELIVERY") or party_name(parties, "CONSIGNEE"),
-        "destination_city": city(shipment.get("destination")),
+        "origin": None if sent else other,
+        # Posti no longer tells where a shipment was sent from.
+        "origin_city": None,
+        # The pickup point when there is one, otherwise where it is delivered, or for a sent one the recipient.
+        "destination": text(address.get("publicName")) or text(destination.get("name")) or (other if sent else None),
+        "destination_city": text(address.get("city")) or text(destination.get("city")),
         "shipment_number": shipment_number,
-        "shipment_date": shipment.get("savedDateTime"),
+        # Nor when it was added to the account.
+        "shipment_date": None,
         "status": status,
-        "raw_status": shipment.get("shipmentPhase"),
-        "latest_event": description(event, language),
-        "latest_event_city": location.get("city"),
-        "latest_event_country": location.get("country"),
+        "raw_status": main,
+        "direction": direction,
+        "latest_event": text(event.get("eventDescription")),
+        "latest_event_city": text(event.get("city")),
+        "latest_event_country": None,
         "latest_event_date": event.get("timestamp"),
-        "estimated_delivery": shipment.get("estimatedDeliveryTime"),
-        # Posti doesn't tell how long a package is kept.
-        "pickup_deadline": None,
-        "weight": number(shipment.get("grossWeight")),
-        "package_count": whole_number(shipment.get("packageQuantity")),
-        "pickup_point": pickup_point(point, with_door=with_code),
-        "pickup_code": code,
-        "pickup_qr": pickup_qr(point, code) if settings.pickup_code == PICKUP_CODE_CODE_AND_QR else None,
+        "estimated_delivery": text(mapping(delivery.get("time")).get("timestamp")),
+        "pickup_deadline": text(point.get("lastCollectionDate")),
+        "weight": number(mapping(measurements.get("weight")).get("value")),
+        "package_count": whole_number(mapping(measurements.get("packageQuantity")).get("value")),
+        "pickup_point": pickup_point(point, details, language, with_door=with_code),
+        "pickup_code": pickup_code(details) if with_code else None,
+        "pickup_qr": pickup_qr(details) if settings.pickup_code == PICKUP_CODE_CODE_AND_QR else None,
         "source": "Posti",
         "tracking_url": tracking_url(shipment_number),
     }
 
 
-def pickup_point(point: Mapping[str, Any], *, with_door: bool) -> dict[str, Any] | None:
-    """Where the package is picked up: the locker or counter, with its address. The locker door goes with the code."""
-    location = point.get("location") if isinstance(point.get("location"), Mapping) else {}
+def pickup_point(point: Mapping[str, Any], details: Mapping[str, Any], language: str, *, with_door: bool) -> dict[str, Any] | None:
+    """Where the package is picked up: the locker or counter, with its address. The locker door or the counter shelf
+    goes with the code."""
+    address = mapping(point.get("address"))
     found = {
-        "name": point.get("lockerAddress"),
-        # The door the package is behind, at lockers with a keypad on every door. Posti flags when it is worth showing:
-        # the ID of a package kept at a counter isn't.
-        "compartment": point.get("lockerID") if with_door and point.get("showLockerID") is True else None,
-        "street": location.get("street1"),
-        "postal_code": location.get("postCode"),
-        "city": location.get("city"),
-        "type": point.get("type"),
-        "available": point.get("availabilityTime"),
+        "name": text(address.get("publicName")),
+        "compartment": compartment(point, details) if with_door else None,
+        "street": text(address.get("streetAddress")),
+        "postal_code": text(address.get("postcode")),
+        "city": text(address.get("city")),
+        "type": text(point.get("type")),
+        "available": opening_hours(point.get("openingHours"), language),
     }
     return found if any(value for value in found.values()) else None
 
 
-def pickup_code(point: Mapping[str, Any]) -> str | None:
-    """The code that opens the locker, or the one given at a counter."""
-    code = point.get("lockerCode") or point.get("pupCode")
-    return str(code) if code else None
+def compartment(point: Mapping[str, Any], details: Mapping[str, Any]) -> str | None:
+    """The locker door, the part of lockerId before its slash, or the shelf a counter keeps the package on. At an
+    outdoor locker that part is the keypad, not a door, so there is none."""
+    method = details.get("pickupMethod")
+    if method == METHOD_LOCKER_CODE and point.get("type") != LOCKER_OUTDOOR:
+        door = (text(details.get("lockerId")) or "").split("/")[0]
+        return door or None
+    if method == METHOD_QR_CODE:
+        return text(details.get("shelfId"))
+    return None
 
 
-def pickup_qr(point: Mapping[str, Any], code: str | None) -> str | None:
-    """What a QR code for the counter holds: the pickup code as it is shown, at the pickup points that scan one.
+def pickup_code(details: Mapping[str, Any]) -> str | None:
+    """The code typed in at a locker, or the pickup code given at a counter. A QR code pickup has none."""
+    return text(details.get("pinCode")) if details.get("pickupMethod") in (METHOD_LOCKER_CODE, METHOD_PICKUP_CODE) else None
 
-    Posti's notices of arrival encode the code people see, such as P12345, whichever field it comes in. A counter
-    package can have a pupCode of another kind beside it, a long number, which is not it."""
-    return code if code and point.get("type") in QR_POINT_TYPES else None
+
+def pickup_qr(details: Mapping[str, Any]) -> str | None:
+    """What the QR code holds, as OmaPosti's web app makes it: the pickup code, or at a counter shelf the item's id.
+    Lockers take the code on a keypad, so they have none."""
+    method = details.get("pickupMethod")
+    if method == METHOD_PICKUP_CODE:
+        return text(details.get("pinCode"))
+    if method == METHOD_QR_CODE:
+        return text(details.get("itemId"))
+    return None
+
+
+def opening_hours(hours: Any, language: str) -> str | None:
+    """The opening hours as one line, days with the same hours together: ma-la 7.00 - 21.00, su 10.00 - 18.00."""
+    names = DAY_NAMES.get(language, DAY_NAMES["en"])
+    by_day = {item.get("dayOfWeek"): item for item in hours or [] if isinstance(item, Mapping)}
+    spans: list[tuple[int, int, str]] = []
+    for index, day in enumerate(DAYS):
+        if day not in by_day:
+            continue
+        when = day_hours(by_day[day], language)
+        if when is None:
+            continue
+        if spans and spans[-1][1] == index - 1 and spans[-1][2] == when:
+            spans[-1] = (spans[-1][0], index, when)
+        else:
+            spans.append((index, index, when))
+    parts = [f"{names[first]}{'' if first == last else '-' + names[last]} {when}" for first, last, when in spans]
+    return ", ".join(parts) or None
+
+
+def day_hours(item: Mapping[str, Any], language: str) -> str | None:
+    if item.get("closed") is True:
+        return CLOSED.get(language, CLOSED["en"])
+    if item.get("open24h") is True:
+        return ALL_DAY
+    opens, closes = clock(item.get("opens"), language), clock(item.get("closes"), language)
+    return f"{opens} - {closes}" if opens and closes else None
+
+
+def clock(value: Any, language: str) -> str | None:
+    """07:00:00 as 7.00 in Finnish and 7:00 in English."""
+    parts = str(value or "").split(":")
+    if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return None
+    return f"{int(parts[0])}{'.' if language == 'fi' else ':'}{parts[1]}"
+
+
+def mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def text(value: Any) -> str | None:
+    """A text from Posti, or None for anything else, an empty one included."""
+    return value if isinstance(value, str) and value else None
 
 
 def number(value: Any) -> float | None:
@@ -233,27 +357,6 @@ def whole_number(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-
-
-def party_name(parties: list[Mapping[str, Any]], role: str) -> str | None:
-    for party in parties:
-        if party.get("role") == role:
-            name = party.get("name")
-            return ", ".join(name) if isinstance(name, list) else name
-    return None
-
-
-def city(place: Any) -> str | None:
-    return place.get("city") if isinstance(place, Mapping) else None
-
-
-def description(event: Mapping[str, Any], language: str) -> str | None:
-    """The event's description in the chosen language, or in another when Posti has none in it."""
-    descriptions = [item for item in event.get("eventDescription") or [] if isinstance(item, Mapping)]
-    for item in descriptions:
-        if item.get("lang") == language:
-            return item.get("value")
-    return descriptions[0].get("value") if descriptions else None
 
 
 def parse_time(value: Any) -> datetime | None:

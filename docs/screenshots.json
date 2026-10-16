@@ -11,19 +11,20 @@
                 "packages": [
                     {
                         "origin": "Example Shop",
-                        "origin_city": "HELSINKI",
+                        "origin_city": null,
                         "destination": "Example Market Kaleva",
                         "destination_city": "TAMPERE",
                         "shipment_number": "JJFI00010000000000011",
-                        "shipment_date": "2026-10-10T14:20:00Z",
+                        "shipment_date": null,
                         "status": 5,
+                        "direction": "incoming",
                         "raw_status": "READY_FOR_PICKUP",
                         "latest_event": "The shipment can be picked up",
                         "latest_event_city": "TAMPERE",
-                        "latest_event_country": "FI",
+                        "latest_event_country": null,
                         "latest_event_date": "2026-10-14T06:41:00Z",
                         "estimated_delivery": "2026-10-14T10:00:00Z",
-                        "pickup_deadline": null,
+                        "pickup_deadline": "2026-10-22",
                         "weight": 1.2,
                         "package_count": 1,
                         "pickup_point": {
@@ -32,8 +33,8 @@
                             "street": "Esimerkkikatu 1",
                             "postal_code": "33500",
                             "city": "TAMPERE",
-                            "type": "NOUTOPISTE",
-                            "available": "ma-pe 8-21, la-su 9-18"
+                            "type": "POSTI_SERVICE_POINT",
+                            "available": "ma-pe 8.00 - 21.00, la-su 9.00 - 18.00"
                         },
                         "pickup_code": "48291",
                         "pickup_qr": "48291",
@@ -42,16 +43,17 @@
                     },
                     {
                         "origin": "Example Books",
-                        "origin_city": "TURKU",
+                        "origin_city": null,
                         "destination": "Parcel locker, Example Centre Hervanta",
                         "destination_city": "TAMPERE",
                         "shipment_number": "JJFI00010000000000022",
-                        "shipment_date": "2026-10-12T08:05:00Z",
+                        "shipment_date": null,
                         "status": 3,
+                        "direction": "incoming",
                         "raw_status": "IN_TRANSPORT",
                         "latest_event": "The shipment is on its way to the destination",
                         "latest_event_city": "VANTAA",
-                        "latest_event_country": "FI",
+                        "latest_event_country": null,
                         "latest_event_date": "2026-10-14T03:15:00Z",
                         "estimated_delivery": "2026-10-15T12:00:00Z",
                         "pickup_deadline": null,
@@ -64,7 +66,7 @@
                             "postal_code": "33720",
                             "city": "TAMPERE",
                             "type": "LOCKER",
-                            "available": "24h"
+                            "available": "ma-su 24 h"
                         },
                         "pickup_code": null,
                         "pickup_qr": null,
@@ -73,16 +75,17 @@
                     },
                     {
                         "origin": "Example Outdoor Gear",
-                        "origin_city": "OULU",
+                        "origin_city": null,
                         "destination": "Matti Meikäläinen",
                         "destination_city": "TAMPERE",
                         "shipment_number": "JJFI00010000000000033",
-                        "shipment_date": "2026-10-01T10:00:00Z",
+                        "shipment_date": null,
                         "status": 0,
+                        "direction": "incoming",
                         "raw_status": "DELIVERED",
                         "latest_event": "The shipment has been delivered",
                         "latest_event_city": "TAMPERE",
-                        "latest_event_country": "FI",
+                        "latest_event_country": null,
                         "latest_event_date": "2026-10-13T15:30:00Z",
                         "estimated_delivery": null,
                         "pickup_deadline": null,
@@ -99,11 +102,11 @@
         },
         "sensor.posti_matti_meikalainen_example_com_packages_on_the_way": {
             "state": "2",
-            "attributes": { "friendly_name": "Packages on the way", "icon": "mdi:package-variant-closed", "state_class": "measurement" }
+            "attributes": { "friendly_name": "Incoming on the way", "icon": "mdi:package-variant-closed", "state_class": "measurement" }
         },
         "sensor.posti_matti_meikalainen_example_com_packages_ready_for_pickup": {
             "state": "1",
-            "attributes": { "friendly_name": "Packages ready for pickup", "icon": "mdi:package-down", "state_class": "measurement" }
+            "attributes": { "friendly_name": "Incoming ready for pickup", "icon": "mdi:package-down", "state_class": "measurement" }
         }
     },
     "shots": [

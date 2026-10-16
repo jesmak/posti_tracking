@@ -25,7 +25,7 @@ from custom_components.posti_tracking.device import (
     signed_body,
     vault_key,
 )
-from custom_components.posti_tracking.exceptions import PostiAuthError, PostiError
+from custom_components.posti_tracking.exceptions import PostiAuthError, PostiDeviceGone, PostiError
 
 from .conftest import jwt
 
@@ -110,6 +110,21 @@ async def test_renewing_the_tokens(hass: HomeAssistant, aioclient_mock: AiohttpC
 )
 async def test_a_deactivated_device(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, answer: dict) -> None:
     aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, json=answer)
+
+    with pytest.raises(PostiAuthError):
+        await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
+
+
+async def test_a_removed_device_is_told_apart_from_a_refused_renewal(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
+    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=404, json={"error": {"code": 404, "message": "NO_DEVICE_FOUND"}})
+
+    with pytest.raises(PostiDeviceGone):
+        await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+async def test_a_refusal_without_json_asks_for_a_new_login(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int) -> None:
+    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, text="")
 
     with pytest.raises(PostiAuthError):
         await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)

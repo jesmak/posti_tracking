@@ -9,6 +9,12 @@
       },
       "ready_for_pickup": {
         "default": "mdi:package-down"
+      },
+      "outgoing_on_the_way": {
+        "default": "mdi:package-up"
+      },
+      "outgoing_ready_for_pickup": {
+        "default": "mdi:package-variant-closed-check"
       }
     },
     "event": {

@@ -24,7 +24,8 @@
         "data": {
           "language": "Language",
           "prioritize_undelivered": "Undelivered packages first",
-          "max_shipments": "Maximum number of packages",
+          "max_shipments": "Maximum number of incoming packages",
+          "max_outgoing_shipments": "Maximum number of sent packages",
           "stale_shipment_day_limit": "Days until undelivered packages are hidden",
           "completed_shipment_day_shown": "Days until delivered packages are hidden",
           "pickup_code": "Pickup code"
@@ -32,7 +33,8 @@
         "data_description": {
           "language": "Language of the package event descriptions.",
           "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
-          "max_shipments": "How many packages the sensor lists.",
+          "max_shipments": "How many incoming packages the sensor lists. Set it to 0 to leave incoming packages out altogether, from the counts and events too.",
+          "max_outgoing_shipments": "How many sent packages the sensor lists. Set it to 0 to leave sent packages out altogether, from the counts and events too.",
           "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
           "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered.",
           "pickup_code": "A code for collecting the package, and if you like a QR code to show at a service point. Off by default as this is sensitive data."
@@ -48,7 +50,8 @@
         "data": {
           "language": "Language",
           "prioritize_undelivered": "Undelivered packages first",
-          "max_shipments": "Maximum number of packages",
+          "max_shipments": "Maximum number of incoming packages",
+          "max_outgoing_shipments": "Maximum number of sent packages",
           "stale_shipment_day_limit": "Days until undelivered packages are hidden",
           "completed_shipment_day_shown": "Days until delivered packages are hidden",
           "pickup_code": "Pickup code"
@@ -56,7 +59,8 @@
         "data_description": {
           "language": "Language of the package event descriptions.",
           "prioritize_undelivered": "When there are more packages than the maximum, undelivered ones are listed before delivered ones.",
-          "max_shipments": "How many packages the sensor lists.",
+          "max_shipments": "How many incoming packages the sensor lists. Set it to 0 to leave incoming packages out altogether, from the counts and events too.",
+          "max_outgoing_shipments": "How many sent packages the sensor lists. Set it to 0 to leave sent packages out altogether, from the counts and events too.",
           "stale_shipment_day_limit": "Counted from the package's latest event. Some packages stay in delivery for good.",
           "completed_shipment_day_shown": "Counted from the delivery. Packages returned to the sender count as delivered.",
           "pickup_code": "A code for collecting the package, and if you like a QR code to show at a service point."
@@ -128,10 +132,16 @@
     },
     "sensor": {
       "on_the_way": {
-        "name": "Packages on the way"
+        "name": "Incoming on the way"
       },
       "ready_for_pickup": {
-        "name": "Packages ready for pickup"
+        "name": "Incoming ready for pickup"
+      },
+      "outgoing_on_the_way": {
+        "name": "Sent on the way"
+      },
+      "outgoing_ready_for_pickup": {
+        "name": "Sent ready for pickup"
       }
     }
   },

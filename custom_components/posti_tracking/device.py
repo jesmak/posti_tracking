@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from .const import APP_USER_AGENT, AUTH_SERVICE_URL, DEVICE_MODEL, MFA_URL
-from .exceptions import PostiAuthError, PostiError
+from .exceptions import PostiAuthError, PostiDeviceGone, PostiError, PostiNotJson
 from .login import APP_HEADERS, new_pkce, request_json
 
 PSS = padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32)
@@ -166,11 +166,17 @@ async def refresh(session: aiohttp.ClientSession, device: Device, id_token: str)
     The device's vault holds the refresh key, encrypted for the device. It is fetched and opened anew every time.
     """
     key = device.key()
-    status, body = await request_json(
-        session, "POST", f"{MFA_URL}/device_refresh", headers=bearer_headers(id_token), json=signed_body(device, key)
-    )
+    try:
+        status, body = await request_json(
+            session, "POST", f"{MFA_URL}/device_refresh", headers=bearer_headers(id_token), json=signed_body(device, key)
+        )
+    except PostiNotJson as err:
+        # Any 401 or 403 needs a new login, whatever its body is.
+        if err.status in (401, 403):
+            raise PostiAuthError(f"Posti refused to renew the login (status {err.status})") from err
+        raise
     if error_of(body) in DEVICE_GONE:
-        raise PostiAuthError(f"The device is no longer trusted, it has been deactivated in OmaPosti ({error_of(body)})")
+        raise PostiDeviceGone(f"The device is no longer trusted, it has been deactivated in OmaPosti ({error_of(body)})")
     # A login too old to renew with is refused the same way, and only a new login helps. A 404 without one of the codes
     # above is no sign of a removed device: an endpoint that moved shouldn't send anyone to their bank.
     if status in (401, 403):

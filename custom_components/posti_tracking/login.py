@@ -32,7 +32,7 @@ from .const import (
     UAS_HOST,
     WEB_VIEW_USER_AGENT,
 )
-from .exceptions import InvalidReturnAddress, PostiAuthError, PostiError
+from .exceptions import InvalidReturnAddress, PostiAuthError, PostiError, PostiNotJson
 
 TIMEOUT_SECONDS = 20
 TIMEOUT = aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)
@@ -188,7 +188,7 @@ async def request_json(session: aiohttp.ClientSession, method: str, url: str, **
             try:
                 body = await response.json(content_type=None)
             except ValueError as err:
-                raise PostiError(f"Posti answered with something other than JSON (status {status})") from err
+                raise PostiNotJson(status) from err
     except (aiohttp.ClientError, TimeoutError) as err:
         raise PostiError(f"Posti couldn't be reached: {err}") from err
     if not isinstance(body, dict):

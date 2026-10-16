@@ -61,7 +61,7 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
 
     async def _async_update_data(self) -> Packages:
         try:
-            shipments = await self.client.shipments()
+            shipments = await self.client.shipments(self.language)
         except PostiAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except PostiError as err:

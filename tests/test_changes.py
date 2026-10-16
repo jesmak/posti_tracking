@@ -19,6 +19,7 @@ def package(number: str, status: int, changed: str = "2026-09-16T05:30:00Z", **r
         "shipment_number": number,
         "status": status,
         "raw_status": "IN_TRANSPORT",
+        "direction": "incoming",
         "latest_event": "Kuljetuksessa",
         "latest_event_city": "HELSINKI",
         "latest_event_date": changed,
@@ -30,52 +31,70 @@ def package(number: str, status: int, changed: str = "2026-09-16T05:30:00Z", **r
     }
 
 
+def by_key(*packages: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Packages as the event entity holds them, by Posti's shipment number, here the same as the shown one."""
+    return {package["shipment_number"]: package for package in packages}
+
+
 def types(changes: list) -> list[str]:
     return [change.event_type for change in changes]
 
 
 def test_the_first_update_is_not_news() -> None:
-    assert detect_changes(None, [package("JJFI0001", 3)]) == []
+    assert detect_changes(None, by_key(package("JJFI0001", 3))) == []
 
 
 def test_a_package_that_was_not_there_before() -> None:
-    assert types(detect_changes([], [package("JJFI0001", 1)])) == [EVENT_NEW]
+    assert types(detect_changes({}, by_key(package("JJFI0001", 1)))) == [EVENT_NEW]
 
 
 def test_a_status_of_its_own_gets_an_event_of_its_own() -> None:
-    before = [package("JJFI0001", 3), package("JJFI0002", 4), package("JJFI0003", 3)]
-    after = [package("JJFI0001", 5), package("JJFI0002", 0), package("JJFI0003", 6)]
+    before = by_key(package("JJFI0001", 3), package("JJFI0002", 4), package("JJFI0003", 3))
+    after = by_key(package("JJFI0001", 5), package("JJFI0002", 0), package("JJFI0003", 6))
     assert types(detect_changes(before, after)) == [EVENT_READY_FOR_PICKUP, EVENT_DELIVERED, EVENT_RETURNED]
 
 
 def test_any_other_step_is_a_package_moving() -> None:
-    before = [package("JJFI0001", 2)]
-    assert types(detect_changes(before, [package("JJFI0001", 3)])) == [EVENT_MOVED]
+    before = by_key(package("JJFI0001", 2))
+    assert types(detect_changes(before, by_key(package("JJFI0001", 3)))) == [EVENT_MOVED]
 
 
 def test_a_new_event_without_a_new_status_is_a_package_moving() -> None:
-    before = [package("JJFI0001", 3, "2026-09-16T05:30:00Z")]
-    after = [package("JJFI0001", 3, "2026-09-16T07:15:00Z")]
+    before = by_key(package("JJFI0001", 3, "2026-09-16T05:30:00Z"))
+    after = by_key(package("JJFI0001", 3, "2026-09-16T07:15:00Z"))
     assert types(detect_changes(before, after)) == [EVENT_MOVED]
 
 
 def test_a_package_that_did_not_change_is_not_news() -> None:
-    before = [package("JJFI0001", 3)]
-    assert detect_changes(before, [package("JJFI0001", 3)]) == []
+    before = by_key(package("JJFI0001", 3))
+    assert detect_changes(before, by_key(package("JJFI0001", 3))) == []
 
 
 def test_several_changes_in_one_update_are_several_events() -> None:
-    before = [package("JJFI0001", 3), package("JJFI0002", 4)]
-    after = [package("JJFI0001", 5), package("JJFI0002", 0), package("JJFI0003", 1)]
+    before = by_key(package("JJFI0001", 3), package("JJFI0002", 4))
+    after = by_key(package("JJFI0001", 5), package("JJFI0002", 0), package("JJFI0003", 1))
     assert types(detect_changes(before, after)) == [EVENT_READY_FOR_PICKUP, EVENT_DELIVERED, EVENT_NEW]
 
 
+def test_a_new_package_already_at_a_status_of_its_own_gets_that_event_too() -> None:
+    changes = detect_changes({}, by_key(package("JJFI0001", 5), package("JJFI0002", 0), package("JJFI0003", 3)))
+    assert types(changes) == [EVENT_NEW, EVENT_READY_FOR_PICKUP, EVENT_NEW, EVENT_DELIVERED, EVENT_NEW]
+
+
+def test_a_package_back_after_missing_from_an_answer_is_not_new() -> None:
+    # The event entity remembers every package seen since startup, so one missing from an answer is still known.
+    seen = by_key(package("JJFI0001", 3), package("JJFI0002", 4))
+    assert detect_changes(seen, {}) == []
+    assert types(detect_changes(seen, by_key(package("JJFI0001", 3), package("JJFI0002", 5)))) == [EVENT_READY_FOR_PICKUP]
+
+
 def test_an_event_carries_the_package_it_happened_to() -> None:
-    [change] = detect_changes([], [package("JJFI0001", 5)])
+    [change] = detect_changes({}, by_key(package("JJFI0001", 3)))
     assert change.attributes == {
         "shipment_number": "JJFI0001",
-        "status": 5,
+        "status": 3,
         "raw_status": "IN_TRANSPORT",
+        "direction": "incoming",
         "origin": "Example Shop Oy",
         "destination": "Example Market Keskusta",
         "destination_city": "LAPPEENRANTA",

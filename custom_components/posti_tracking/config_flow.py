@@ -40,6 +40,7 @@ from .const import (
     CONF_COMPLETED_SHIPMENT_DAYS_SHOWN,
     CONF_DEVICE,
     CONF_LANGUAGE,
+    CONF_MAX_OUTGOING_SHIPMENTS,
     CONF_MAX_SHIPMENTS,
     CONF_METHOD,
     CONF_PASSWORD,
@@ -49,6 +50,7 @@ from .const import (
     CONF_TOKENS,
     CONF_USERNAME,
     DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
+    DEFAULT_MAX_OUTGOING_SHIPMENTS,
     DEFAULT_MAX_SHIPMENTS,
     DEFAULT_PICKUP_CODE,
     DEFAULT_PRIORITIZE_UNDELIVERED,
@@ -64,13 +66,16 @@ from .exceptions import InvalidReturnAddress, PostiAuthError, PostiError
 from .login import StrongLogin, bank_address, finish_login, start_login
 
 DAYS_SELECTOR = NumberSelector(NumberSelectorConfig(min=0, max=365, step=1, mode=NumberSelectorMode.BOX))
+# 0 leaves that direction out altogether.
+MAX_SELECTOR = NumberSelector(NumberSelectorConfig(min=0, max=50, step=1, mode=NumberSelectorMode.BOX))
 
 SETTING_FIELDS = {
     vol.Required(CONF_LANGUAGE): SelectSelector(
         SelectSelectorConfig(options=LANGUAGES, translation_key=CONF_LANGUAGE, mode=SelectSelectorMode.DROPDOWN)
     ),
     vol.Required(CONF_PRIORITIZE_UNDELIVERED): BooleanSelector(),
-    vol.Required(CONF_MAX_SHIPMENTS): NumberSelector(NumberSelectorConfig(min=1, max=50, step=1, mode=NumberSelectorMode.BOX)),
+    vol.Required(CONF_MAX_SHIPMENTS): MAX_SELECTOR,
+    vol.Required(CONF_MAX_OUTGOING_SHIPMENTS): MAX_SELECTOR,
     vol.Required(CONF_STALE_SHIPMENT_DAY_LIMIT): DAYS_SELECTOR,
     vol.Required(CONF_COMPLETED_SHIPMENT_DAYS_SHOWN): DAYS_SELECTOR,
     vol.Required(CONF_PICKUP_CODE): SelectSelector(
@@ -90,7 +95,7 @@ METHOD_ID = re.compile(r"telia\.ftn\.oidc\.([a-z0-9_]+)\.1")
 def clean_settings(user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Submitted settings, normalised for storing."""
     data = {key: user_input[key] for key in (CONF_LANGUAGE, CONF_PRIORITIZE_UNDELIVERED, CONF_PICKUP_CODE) if key in user_input}
-    for key in (CONF_MAX_SHIPMENTS, CONF_STALE_SHIPMENT_DAY_LIMIT, CONF_COMPLETED_SHIPMENT_DAYS_SHOWN):
+    for key in (CONF_MAX_SHIPMENTS, CONF_MAX_OUTGOING_SHIPMENTS, CONF_STALE_SHIPMENT_DAY_LIMIT, CONF_COMPLETED_SHIPMENT_DAYS_SHOWN):
         if key in user_input:
             data[key] = int(user_input[key])
     return data
@@ -110,6 +115,14 @@ def method_choices(methods: Iterable[str]) -> dict[str, str]:
     return dict(sorted(choices.items(), key=lambda item: order.get(item[0], len(order))))
 
 
+def same_account(entry_data: Mapping[str, Any], unique_id: str | None, tokens: Mapping[str, Any], email: str) -> bool:
+    """Whether a login is of the account an entry follows: by the account's subject when the entry has a device, as an
+    email can change, and by the email the entry was set up with otherwise."""
+    if CONF_DEVICE in entry_data:
+        return (jwt_payload(tokens.get("id_token")) or {}).get("sub") == Device.from_data(entry_data[CONF_DEVICE]).subject
+    return email.lower() == unique_id
+
+
 def account_email(tokens: Mapping[str, Any]) -> str | None:
     """The account's email address, from the id token of its login."""
     emails = (jwt_payload(tokens.get("id_token")) or {}).get("email")
@@ -120,10 +133,11 @@ def account_email(tokens: Mapping[str, Any]) -> str | None:
 
 
 class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
-    # 1.1 entries have no unique id, 1.2 entries a password, and 1.3 entries the old pickup switch.
+    # 1.1 entries have no unique id, 1.2 entries a password, 1.3 entries the old pickup switch, and 1.4 entries one
+    # maximum for both directions.
     # __init__.async_migrate_entry updates them all.
     VERSION = 1
-    MINOR_VERSION = 4
+    MINOR_VERSION = 5
 
     def __init__(self) -> None:
         # One login's HTTP session: its cookies must last from choosing the method to finishing the login.
@@ -154,7 +168,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             return await self._show_methods()
         try:
             self._bank_address = await bank_address(self._http(), self._login, self._choices[user_input[CONF_METHOD]])
-        except PostiError:
+        except PostiError as err:
+            _LOGGER.warning("Posti's login didn't lead to the authentication: %s", err)
             return await self._show_methods({"base": "cannot_connect"})
         return await self.async_step_authenticate()
 
@@ -163,7 +178,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._end_session()
         try:
             self._login = await start_login(self._http())
-        except PostiError:
+        except PostiError as err:
+            _LOGGER.warning("Posti's login couldn't be started: %s", err)
             return self.async_abort(reason="cannot_connect")
         self._choices = method_choices(self._login.methods)
         schema = vol.Schema(
@@ -191,7 +207,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             except PostiAuthError:
                 # The login can't be finished any more, so the user starts over.
                 return await self._show_methods({"base": "invalid_auth"})
-            except PostiError:
+            except PostiError as err:
+                _LOGGER.warning("Posti's login couldn't be finished: %s", err)
                 return await self._show_methods({"base": "cannot_connect"})
             else:
                 return await self._register_device(tokens)
@@ -214,7 +231,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             return await self._show_methods({"base": "no_account"})
         if self.source == SOURCE_REAUTH:
             # Checked before registering a device, so that another account isn't left with one.
-            if email.lower() != self._get_reauth_entry().unique_id:
+            entry = self._get_reauth_entry()
+            if not same_account(entry.data, entry.unique_id, tokens, email):
                 return self.async_abort(reason="wrong_account")
             registered = await self._provision(tokens)
             if registered is None:
@@ -240,7 +258,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         try:
             device, tokens = await provision(session, tokens)
             tokens = {**tokens, **await refresh(session, device, tokens["id_token"])}
-            shipments_in(*await query_shipments(session, tokens))
+            # The first page is enough to know the packages can be read, in whichever language.
+            shipments_in(*await query_shipments(session, tokens, 1, "en"))
         except PostiError as err:
             if device is not None:
                 try:
@@ -251,7 +270,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
                         "Remove the extra Home Assistant in the OmaPosti app under More, Settings, Security settings",
                         cleanup,
                     )
-            _LOGGER.debug("Registering the device failed: %s", err)
+            _LOGGER.warning("Registering Home Assistant as a device of the account failed: %s", err)
             return None
 
         if self.source == SOURCE_REAUTH and CONF_DEVICE in self._get_reauth_entry().data:
@@ -297,6 +316,7 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
             CONF_LANGUAGE: language if language in LANGUAGES else "en",
             CONF_PRIORITIZE_UNDELIVERED: DEFAULT_PRIORITIZE_UNDELIVERED,
             CONF_MAX_SHIPMENTS: DEFAULT_MAX_SHIPMENTS,
+            CONF_MAX_OUTGOING_SHIPMENTS: DEFAULT_MAX_OUTGOING_SHIPMENTS,
             CONF_STALE_SHIPMENT_DAY_LIMIT: DEFAULT_STALE_SHIPMENT_DAY_LIMIT,
             CONF_COMPLETED_SHIPMENT_DAYS_SHOWN: DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN,
             CONF_PICKUP_CODE: DEFAULT_PICKUP_CODE,

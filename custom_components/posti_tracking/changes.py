@@ -7,7 +7,7 @@ event of its own, so an automation sees them all.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +33,7 @@ EVENT_KEYS = (
     "shipment_number",
     "status",
     "raw_status",
+    "direction",
     "origin",
     "destination",
     "destination_city",
@@ -53,22 +54,24 @@ class PackageChange:
         return {key: self.package.get(key) for key in EVENT_KEYS}
 
 
-def detect_changes(previous: Sequence[Mapping[str, Any]] | None, current: Iterable[Mapping[str, Any]]) -> list[PackageChange]:
-    """The events between two lists of packages.
+def detect_changes(previous: Mapping[str, Mapping[str, Any]] | None, current: Mapping[str, Mapping[str, Any]]) -> list[PackageChange]:
+    """The events between the packages seen before and now, both by Posti's shipment number.
 
     Nothing is reported for the first update: the packages that are already there
-    when Home Assistant starts have not just happened.
+    when Home Assistant starts have not just happened. A new package that has
+    already reached a status of its own, such as one first seen at its pickup
+    point, gets that status's event too, so an automation listening for it hears.
     """
     if previous is None:
         return []
 
-    before = {package.get("shipment_number"): package for package in previous}
     changes: list[PackageChange] = []
-    for package in current:
-        number = package.get("shipment_number")
-        was = before.get(number)
+    for key, package in current.items():
+        was = previous.get(key)
         if was is None:
             changes.append(PackageChange(EVENT_NEW, package))
+            if package.get("status") in EVENT_BY_STATUS:
+                changes.append(PackageChange(EVENT_BY_STATUS[package.get("status")], package))
         elif was.get("status") != package.get("status"):
             changes.append(PackageChange(EVENT_BY_STATUS.get(package.get("status"), EVENT_MOVED), package))
         elif was.get("latest_event_date") != package.get("latest_event_date"):

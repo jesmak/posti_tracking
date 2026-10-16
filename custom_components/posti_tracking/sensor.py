@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import ATTRIBUTION, CONF_USERNAME
 from .coordinator import PostiConfigEntry, PostiCoordinator
-from .shipments import FINISHED, STATUS_READY_FOR_PICKUP
+from .shipments import DIRECTION_OUTGOING, FINISHED, STATUS_READY_FOR_PICKUP
 
 ATTR_PACKAGES = "packages"
 
@@ -31,10 +31,25 @@ async def async_setup_entry(
     async_add_entities(
         [
             PostiSensor(coordinator),
-            PostiCountSensor(coordinator, "on_the_way", lambda status: status not in FINISHED),
-            PostiCountSensor(coordinator, "ready_for_pickup", lambda status: status == STATUS_READY_FOR_PICKUP),
+            # The account's own packages, and those it has sent. A package whose direction isn't known is taken as its own.
+            PostiCountSensor(coordinator, "on_the_way", lambda package: not sent(package) and on_the_way(package)),
+            PostiCountSensor(coordinator, "ready_for_pickup", lambda package: not sent(package) and ready(package)),
+            PostiCountSensor(coordinator, "outgoing_on_the_way", lambda package: sent(package) and on_the_way(package)),
+            PostiCountSensor(coordinator, "outgoing_ready_for_pickup", lambda package: sent(package) and ready(package)),
         ]
     )
+
+
+def sent(package: Mapping[str, Any]) -> bool:
+    return package.get("direction") == DIRECTION_OUTGOING
+
+
+def on_the_way(package: Mapping[str, Any]) -> bool:
+    return package.get("status") not in FINISHED
+
+
+def ready(package: Mapping[str, Any]) -> bool:
+    return package.get("status") == STATUS_READY_FOR_PICKUP
 
 
 class PostiSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):
@@ -67,13 +82,13 @@ class PostiSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):
 
 
 class PostiCountSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):
-    """How many of the account's packages are on their way, or waiting to be picked up."""
+    """How many of the account's packages, or of those it has sent, are on their way or waiting to be picked up."""
 
     _attr_attribution = ATTRIBUTION
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: PostiCoordinator, key: str, counts: Callable[[Any], bool]) -> None:
+    def __init__(self, coordinator: PostiCoordinator, key: str, counts: Callable[[Mapping[str, Any]], bool]) -> None:
         super().__init__(coordinator)
         entry = coordinator.config_entry
         username = entry.data[CONF_USERNAME]
@@ -88,4 +103,4 @@ class PostiCountSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):
         if data is None:
             return None
         # All of them, not only those the list has room for.
-        return sum(1 for package in data.current if self._counts(package.get("status")))
+        return sum(1 for package in data.current if self._counts(package))

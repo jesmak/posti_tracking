@@ -14,7 +14,7 @@ account. There's no need to add packages by hand. The list comes from the packag
 every 10 minutes.
 
 The sensor lists the packages in the format [package-tracker-card](https://github.com/jesmak/package-tracker-card)
-reads, so the card can show them together with packages from other tracking integrations. Two more sensors count the
+reads, so the card can show them together with packages from other tracking integrations. Four more sensors count the
 packages, and an event entity fires when one of them moves along.
 
 This is an unofficial integration. See [Data](#data) for what that means.
@@ -94,19 +94,26 @@ integration page.
 | ------------------------------------------ | ------- | -------------------------------------------------------------------------------- | ------------------------- |
 | Language                                   | enum    | Language of the package event descriptions, `fi` or `en`                         | Home Assistant's language |
 | Undelivered packages first                 | boolean | When there are more packages than the maximum, undelivered ones are listed first | on                        |
-| Maximum number of packages                 | number  | How many packages the sensor lists                                               | 5                         |
+| Maximum number of incoming packages        | number  | How many incoming packages the sensor lists. 0 leaves them out altogether        | 5                         |
+| Maximum number of sent packages            | number  | How many sent packages the sensor lists. 0 leaves them out altogether            | 5                         |
 | Days until undelivered packages are hidden | days    | Counted from the latest event. Some packages stay in delivery for good           | 15                        |
 | Days until delivered packages are hidden   | days    | Counted from the delivery. Returned packages count as delivered                  | 3                         |
 | Pickup code                                | enum    | Don't add, add, or add with a QR code                                            | don't add                 |
 
 The pickup code opens the locker, or collects the package at a counter, and anyone who can see your dashboard can
-read it. So it is left out unless **Pickup code** is set to **Add** or **Add with a QR code**. The locker door the
-package is behind goes with the code. The pickup point itself is always included.
+read it. So it is left out unless **Pickup code** is set to **Add** or **Add with a QR code**. The locker door, or the
+shelf a counter keeps the package on, goes with the code. The pickup point itself is always included.
 
-With **Add with a QR code**, a package waiting at a counter also carries what a QR code for the counter holds. Posti's
-counters scan the QR code of the notice of arrival, which holds the counter's plain pickup code. That is the case at
-Posti's own service points and its partners' (types `POSTI` and `NOUTOPISTE`). Lockers take the code on a keypad, so
-their packages get no QR code.
+Posti gives these details only once a package is ready for pickup, in one of three ways, and the integration reads
+them as OmaPosti's own web app does:
+
+- **At a locker,** a code typed in on its keypad, and the door the package is behind. At an outdoor locker Posti's
+  number is the keypad to type the code on rather than a door, so it is left out. A locker needs no QR code.
+- **With a pickup code,** the code shown at the counter, which is also what its QR code holds.
+- **At a counter shelf,** a QR code of the package itself and the shelf it is on, with no code to type.
+
+With **Add with a QR code**, a package collected with a pickup code or from a shelf carries what its QR code holds,
+which package-tracker-card can draw.
 
 ## Sensors
 
@@ -117,59 +124,69 @@ sensor is named after the account, for example `sensor.posti_matti_meikalainen_e
 
 The `packages` attribute lists the packages, and each package has these keys.
 
-| Key                                         | Description                                                                         |
-| ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `shipment_number`                           | The tracking number, or Posti's shipment number without one                         |
-| `status`                                    | The package's status, below                                                         |
-| `raw_status`                                | Posti's shipment phase, such as `READY_FOR_PICKUP`                                  |
-| `origin`, `origin_city`                     | The sender and its city                                                             |
-| `destination`, `destination_city`           | The pickup point, or the receiver without one, and the city                         |
-| `shipment_date`                             | When Posti received the shipment's details                                          |
-| `latest_event`                              | The latest event, in the chosen language when Posti has it                          |
-| `latest_event_city`, `latest_event_country` | Where the latest event happened                                                     |
-| `latest_event_date`                         | When the package last changed                                                       |
-| `estimated_delivery`                        | When the package is expected, when the service says                                 |
-| `pickup_deadline`                           | How long it is kept at the pickup point. Posti never tells, so it is always empty   |
-| `weight`                                    | The package's weight in kilograms                                                   |
-| `package_count`                             | How many parcels the shipment has                                                   |
-| `pickup_point`                              | The pickup point, with `name`, `street`, `postal_code`, `city`, `type`, `available` |
-| `pickup_point.compartment`                  | The locker door the package is behind, when the code is added                       |
-| `pickup_code`                               | The code that opens the locker or collects the package, when it is added            |
-| `pickup_qr`                                 | What a QR code for the counter holds, with **Add with a QR code**                   |
-| `source`                                    | Always `Posti`                                                                      |
-| `tracking_url`                              | The package's page on posti.fi                                                      |
+| Key                               | Description                                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `shipment_number`                 | The tracking number, or Posti's shipment id without one                                                     |
+| `status`                          | The package's status, below                                                                                 |
+| `raw_status`                      | Posti's status, such as `READY_FOR_PICKUP`                                                                  |
+| `direction`                       | `incoming`, or `outgoing` for a package sent from the account                                               |
+| `origin`                          | The sender. Empty for a package you sent                                                                    |
+| `destination`, `destination_city` | The pickup point, or where it is delivered, or the recipient of one you sent, and the city                  |
+| `latest_event`                    | The latest event, in the chosen language                                                                    |
+| `latest_event_city`               | Where the latest event happened                                                                             |
+| `latest_event_date`               | When the package last changed                                                                               |
+| `estimated_delivery`              | When the package is expected, when Posti says                                                               |
+| `pickup_deadline`                 | How long it is kept at the pickup point                                                                     |
+| `weight`                          | The package's weight in kilograms                                                                           |
+| `package_count`                   | How many parcels the shipment has                                                                           |
+| `pickup_point`                    | The pickup point, with `name`, `street`, `postal_code`, `city`, `type` and its opening hours as `available` |
+| `pickup_point.compartment`        | The locker door or the counter shelf, when the code is added. None at an outdoor locker                     |
+| `pickup_code`                     | The code that opens the locker or collects the package, when it is added                                    |
+| `pickup_qr`                       | What the package's QR code holds, with **Add with a QR code**                                               |
+| `source`                          | Always `Posti`                                                                                              |
+| `tracking_url`                    | The package's page on posti.fi                                                                              |
 
-| `status` | Meaning                | Posti's phase        |
-| -------- | ---------------------- | -------------------- |
-| `1`      | Waiting                | `WAITING`            |
-| `2`      | Received by Posti      | `RECEIVED`           |
-| `3`      | In transport           | `IN_TRANSPORT`       |
-| `4`      | In delivery            | `IN_DELIVERY`        |
-| `5`      | Ready for pickup       | `READY_FOR_PICKUP`   |
-| `0`      | Delivered              | `DELIVERED`          |
-| `6`      | Returned to the sender | `RETURNED_TO_SENDER` |
-| `7`      | Unknown                | any other phase      |
+`origin_city`, `shipment_date` and `latest_event_country` are always empty, as Posti doesn't tell them. They are in
+the list so that packages look the same as other integrations' do.
 
-Posti leaves `pickup_deadline` empty. It is in the list so that packages look the same as other integrations' do.
+| `status` | Meaning                | Posti's status                                                                         |
+| -------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `1`      | Waiting                | `WAITING`, `ORDER_RECEIVED`                                                            |
+| `2`      | Received by Posti      | `RECEIVED`                                                                             |
+| `3`      | In transport           | `IN_TRANSPORT`                                                                         |
+| `4`      | In delivery            | `IN_DELIVERY`                                                                          |
+| `5`      | Ready for pickup       | `READY_FOR_PICKUP`                                                                     |
+| `0`      | Delivered              | `DELIVERED`                                                                            |
+| `6`      | Returned to the sender | Any `RETURN_` status of a package you received, and `RETURN_DELIVERED` of one you sent |
+| `7`      | Unknown                | any other status                                                                       |
+
+A package you sent that comes back to you is incoming while it does, since it is on its way to you. It goes through
+the statuses again, so that it counts, fires its events and shows like any package you are to collect, and its
+`raw_status` keeps the `RETURN_` prefix. Its delivery back is `6`.
 
 Times are ISO 8601 in UTC. Packages without events, which Posti has only been told about, aren't listed. The packages
 aren't stored in the recorder, only the state. The sensor is unavailable while Posti can't be reached.
 
 ### Counts
 
-Two sensors count the packages, so a badge or an automation needs no templating. They count every package of the
+Four sensors count the packages, so a badge or an automation needs no templating. They count every package of the
 account within the days set above, also those the list has no room for.
 
-| Sensor                    | What it counts                              |
-| ------------------------- | ------------------------------------------- |
-| Packages on the way       | Everything that hasn't finished its journey |
-| Packages ready for pickup | The ones waiting at a pickup point          |
+| Sensor                    | What it counts                                                     |
+| ------------------------- | ------------------------------------------------------------------ |
+| Incoming on the way       | Incoming packages that haven't finished their journey              |
+| Incoming ready for pickup | Incoming packages waiting at a pickup point                        |
+| Sent on the way           | Packages sent from the account that haven't finished their journey |
+| Sent ready for pickup     | Sent packages waiting for the recipient at a pickup point          |
 
 ## Events
 
 An event entity, **Package**, fires once for everything that happens to a package, so an automation can act on it
 without watching the packages attribute. Several packages changing in one update fire one event each, packages the
-list has no room for included.
+list has no room for included. A new package that is already ready for pickup, delivered or returned when it is first
+seen fires `new_package` and then that status's event, so an automation listening for either hears of it. Packages
+sent from the account fire events too, with `direction` set to `outgoing`, so an automation about your own parcels
+leaves them out with a condition, as in the example below.
 
 | Event type         | When it fires                                 |
 | ------------------ | --------------------------------------------- |
@@ -179,16 +196,18 @@ list has no room for included.
 | `delivered`        | It has been delivered                         |
 | `returned`         | It was returned to the sender                 |
 
-The event carries the package it happened to, with `shipment_number`, `status`, `raw_status`, `origin`,
+The event carries the package it happened to, with `shipment_number`, `status`, `raw_status`, `direction`, `origin`,
 `destination`, `destination_city`, `latest_event`, `latest_event_city`, `latest_event_date` and `source`.
 
 Nothing fires for the packages that are already there when Home Assistant starts, or when the integration is reloaded,
-since they have not just happened. A change while Home Assistant was off fires nothing either.
+since they have not just happened. A change while Home Assistant was off fires nothing either. A package missing from
+one of Posti's answers and back in the next is compared with how it was, not reported as new.
 
 ## Examples
 
-A notification for every package that can be picked up. The trigger watches every event, not only a change of its
-type, so the second package ready in a row isn't missed. `queued` keeps the events of one update from being dropped.
+A notification for every package that can be picked up, leaving out the ones sent from the account. The trigger
+watches every event, not only a change of its type, so the second package ready in a row isn't missed. `queued` keeps
+the events of one update from being dropped.
 
 
 ```yaml
@@ -206,6 +225,12 @@ automation:
         entity_id: event.posti_matti_meikalainen_example_com_package
         attribute: event_type
         state: ready_for_pickup
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: event.posti_matti_meikalainen_example_com_package
+            attribute: direction
+            state: outgoing
     actions:
       - action: notify.mobile_app_phone
         data:
@@ -221,9 +246,29 @@ entity: sensor.posti_matti_meikalainen_example_com
 pickup_code: toggle
 ```
 
+## Upgrading from 3.1
+
+The integration now reads the service OmaPosti's web app uses, which tells a package you sent from one coming to you.
+Nothing needs doing for it.
+
+The one **Maximum number of packages** became two, one for incoming packages and one for sent ones. Both take the
+number the account had. **Packages on the way** and **Packages ready for pickup** are now **Incoming on the way** and
+**Incoming ready for pickup**, and no longer count packages sent from the account, which have sensors of their own.
+Their entity IDs stay as they were. Events of sent packages still fire, now with `direction`. Add the condition in the
+example above to an automation that should leave them out.
+
+Posti no longer tells a package's sender city, when it was added to the account, or the country of its events, so those
+keys are empty. It now tells how long a package is kept at the pickup point.
+
+The pickup point's `type` is now one of Posti's newer types, `LOCKER`, `LOCKER_OUTDOOR`, `LOCKER_PRIVATE`,
+`POSTI_SERVICE_POINT` or `UNKNOWN`, rather than `POSTI`, `NOUTOPISTE`, `SMARTPOST` or `MUSE_LOCKER`. Its `available` is
+the opening hours as one line made by the integration, such as `ma-pe 7.00 - 21.00, la 10.00 - 18.00`. A package
+without a tracking number has Posti's newer shipment id as its `shipment_number`. A template that compares any of these
+needs updating.
+
 ## Upgrading from 3.0 and earlier
 
-From 3.0, the pickup point is always included now, and the **Pickup point and code** switch became the **Pickup
+Since 3.1, the pickup point is always included, and the **Pickup point and code** switch became the **Pickup
 code** choice. An account that had the switch on gets **Add**, and one that had it off gets **Don't add**. To get QR
 codes as well, choose **Add with a QR code** with **Reconfigure**.
 
@@ -235,7 +280,7 @@ The sensors, the event entity, their entity IDs and the other settings all carry
 
 ## Data
 
-Package data comes from Posti Group Oyj, from the same service the OmaPosti app uses.
+Package data comes from Posti Group Oyj, from the same service OmaPosti's web app uses.
 
 This is an unofficial integration. It isn't affiliated with or endorsed by Posti. Each user logs in with their own
 OmaPosti account, and using it may be against Posti's terms of service, so use it at your own risk. It will be

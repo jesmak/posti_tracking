@@ -25,6 +25,7 @@ SETTINGS = {
     "language": "fi",
     "prioritize_undelivered": True,
     "max_shipments": 5.0,
+    "max_outgoing_shipments": 5.0,
     "stale_shipment_day_limit": 15.0,
     "completed_shipment_day_shown": 3.0,
     "pickup_code": "none",
@@ -41,7 +42,7 @@ RENEWED = {"id_token": "id-2", "access_token": "access-2", "role_tokens": VALID_
 
 
 def account(hass: HomeAssistant, data: dict[str, Any] = ENTRY_DATA) -> MockConfigEntry:
-    entry = MockConfigEntry(domain=DOMAIN, title=USERNAME, version=1, minor_version=4, unique_id=USERNAME, data=data)
+    entry = MockConfigEntry(domain=DOMAIN, title=USERNAME, version=1, minor_version=5, unique_id=USERNAME, data=data)
     entry.add_to_hass(hass)
     return entry
 
@@ -96,7 +97,7 @@ async def test_adding_an_account(hass: HomeAssistant, omaposti: AiohttpClientMoc
     result = await hass.config_entries.flow.async_configure(result["flow_id"], SETTINGS)
     # The renewed tokens are tried on OmaPosti before anything is saved.
     [(_, _, _, headers)] = omaposti.mock_calls
-    assert headers["Authorization"] == "Bearer id-2"
+    assert headers["x-posti-token"] == "Bearer id-2"
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == USERNAME
     assert result["result"].unique_id == USERNAME
@@ -105,6 +106,7 @@ async def test_adding_an_account(hass: HomeAssistant, omaposti: AiohttpClientMoc
         "language": "fi",
         "prioritize_undelivered": True,
         "max_shipments": 5,
+        "max_outgoing_shipments": 5,
         "stale_shipment_day_limit": 15,
         "completed_shipment_day_shown": 3,
         "pickup_code": "none",
@@ -231,7 +233,7 @@ async def test_logging_in_again_with_another_account(hass: HomeAssistant, strong
     entry = account(hass)
     strong_login["finish"].return_value = {
         **LOGIN_TOKENS,
-        "id_token": jwt(datetime(2100, 1, 1, tzinfo=UTC), email=["maija.meikalainen@example.com"]),
+        "id_token": jwt(datetime(2100, 1, 1, tzinfo=UTC), sub="account-2", email=["maija.meikalainen@example.com"]),
     }
 
     result = await entry.start_reauth_flow(hass)
@@ -242,6 +244,25 @@ async def test_logging_in_again_with_another_account(hass: HomeAssistant, strong
     assert result["reason"] == "wrong_account"
     strong_login["provision"].assert_not_called()
     assert entry.data == ENTRY_DATA
+
+
+async def test_logging_in_again_after_the_email_has_changed(
+    hass: HomeAssistant, omaposti: AiohttpClientMocker, strong_login: dict[str, Any]
+) -> None:
+    # The same account, by its subject, though its email is no longer the one the entry was set up with.
+    entry = account(hass)
+    strong_login["finish"].return_value = {
+        **LOGIN_TOKENS,
+        "id_token": jwt(datetime(2100, 1, 1, tzinfo=UTC), sub="account-1", email=["uusi.osoite@example.com"]),
+    }
+
+    result = await entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"method": "op"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"address": RETURN_ADDRESS})
+    await hass.async_block_till_done()
+
+    assert result["reason"] == "reauth_successful"
 
 
 async def test_changing_settings(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:
@@ -255,6 +276,7 @@ async def test_changing_settings(hass: HomeAssistant, strong_login: dict[str, An
             "language": "en",
             "prioritize_undelivered": False,
             "max_shipments": 10.0,
+            "max_outgoing_shipments": 0.0,
             "stale_shipment_day_limit": 30.0,
             "completed_shipment_day_shown": 1.0,
             "pickup_code": "code_and_qr",
@@ -269,6 +291,7 @@ async def test_changing_settings(hass: HomeAssistant, strong_login: dict[str, An
         "language": "en",
         "prioritize_undelivered": False,
         "max_shipments": 10,
+        "max_outgoing_shipments": 0,
         "stale_shipment_day_limit": 30,
         "completed_shipment_day_shown": 1,
         "pickup_code": "code_and_qr",

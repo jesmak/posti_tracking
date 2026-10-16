@@ -13,7 +13,14 @@ TRACKING_URL: Final = "https://www.posti.fi/fi/seuranta#/lahetys/{number}"
 AUTH_SERVICE_URL: Final = "https://auth-service.posti.fi/api/v1"
 UAS_HOST: Final = "todentaminen.posti.fi"
 MFA_URL: Final = "https://mfa.posti.fi/api/v1"
-GRAPH_API_URL: Final = "https://oma.posti.fi/graphql/v2"
+# OmaPosti's AppSync GraphQL, which its web app queries by default. Only it tells a received shipment from a sent one.
+GRAPH_API_URL: Final = "https://graphql.posti.fi/graphql"
+# The errorType of a GraphQL error that refuses the id token. AppSync answers a bad or missing id token with status 200,
+# this, and no shipments at all, and a bad role token with 401.
+UNAUTHORIZED_ERROR_TYPE: Final = "Unauthorized"
+# Shipments asked for at a time, so that a whole account is one page: pages aren't a snapshot, and a shipment that
+# drops off one between two requests moves another off the next. The answer says how many pages there are.
+PAGE_SIZE: Final = 1000
 
 # The integration logs in like the OmaPosti Android app: its HTTP client for the API, its web view for the login page.
 APP_USER_AGENT: Final = "okhttp/4.12.0"
@@ -52,10 +59,12 @@ CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
 CONF_LANGUAGE: Final = "language"
 CONF_PRIORITIZE_UNDELIVERED: Final = "prioritize_undelivered"
+# The most received packages listed, and the most sent ones. 0 leaves that direction out altogether.
 CONF_MAX_SHIPMENTS: Final = "max_shipments"
+CONF_MAX_OUTGOING_SHIPMENTS: Final = "max_outgoing_shipments"
 CONF_STALE_SHIPMENT_DAY_LIMIT: Final = "stale_shipment_day_limit"
 CONF_COMPLETED_SHIPMENT_DAYS_SHOWN: Final = "completed_shipment_day_shown"
-# Whether packages carry their pickup code, and a QR code of it where a counter scans one. Before 1.4 this was
+# Whether packages carry their pickup code, and a QR code where Posti gives one. Before 1.4 this was
 # include_pickup_details, a switch that also held back the pickup point.
 CONF_PICKUP_CODE: Final = "pickup_code"
 CONF_INCLUDE_PICKUP_DETAILS: Final = "include_pickup_details"
@@ -74,11 +83,8 @@ PICKUP_CODE_CODE_AND_QR: Final = "code_and_qr"
 PICKUP_CODE_OPTIONS: Final = [PICKUP_CODE_NONE, PICKUP_CODE_CODE, PICKUP_CODE_CODE_AND_QR]
 # The code is left out unless asked for, since it opens the locker or collects the package.
 DEFAULT_PICKUP_CODE: Final = PICKUP_CODE_NONE
-# Pickup point types where the package is handed over at a counter that scans a QR code of the pickup code:
-# Posti's own service points and its partners'. Lockers (LOCKER, SMARTPOST, MUSE_LOCKER) take the code on a keypad.
-# The QR code holds the plain pickup code, as in Posti's notices of arrival.
-QR_POINT_TYPES: Final = frozenset({"POSTI", "NOUTOPISTE"})
 DEFAULT_MAX_SHIPMENTS: Final = 5
+DEFAULT_MAX_OUTGOING_SHIPMENTS: Final = 5
 DEFAULT_STALE_SHIPMENT_DAY_LIMIT: Final = 15
 DEFAULT_COMPLETED_SHIPMENT_DAYS_SHOWN: Final = 3
 
@@ -86,53 +92,66 @@ UPDATE_INTERVAL: Final = timedelta(minutes=10)
 # The tokens are renewed when the id token expires within this.
 TOKEN_EXPIRY_MARGIN: Final = timedelta(minutes=5)
 
-SHIPMENTS_QUERY: Final = """query GetShipments {
-  shipment {
-    ...ShipmentFields
-  }
-}
-
-fragment ShipmentFields on shipment {
-  shipmentNumber
-  parties {
-    name
-    role
-  }
-  departure {
-    city
-  }
-  destination {
-    city
-  }
-  trackingNumbers
-  events {
-    eventDescription {
-      lang
-      value
-    }
-    eventLocation {
-      city
-      country
-    }
-    timestamp
-  }
-  shipmentPhase
-  savedDateTime
-  estimatedDeliveryTime
-  grossWeight
-  packageQuantity
-  pickupPoint {
-    type
-    lockerAddress
-    lockerCode
-    lockerID
-    showLockerID
-    pupCode
-    availabilityTime
-    location {
-      street1
-      postCode
-      city
+# The shipments, with the fields of the web app's own ShipmentDetails fragment that the packages are made of. The web
+# app's parcels code (cdn.posti.fi/omaposti/parcels) is where their meanings come from.
+SHIPMENTS_QUERY: Final = """query GetConsumerShipments($page: Int!, $pageSize: Int!, $locale: String) {
+  consumerShipments(page: $page, pageSize: $pageSize, locale: $locale) {
+    page
+    totalPages
+    hits {
+      shipmentId
+      userRole
+      displayId
+      displayName
+      delivery {
+        time {
+          timestamp
+        }
+        destination {
+          name
+          city
+        }
+      }
+      pickupPoint {
+        type
+        lastCollectionDate
+        pickupDetails {
+          pickupMethod
+          pinCode
+          lockerId
+          shelfId
+          itemId
+        }
+        address {
+          streetAddress
+          postcode
+          city
+          publicName
+        }
+        openingHours {
+          dayOfWeek
+          opens
+          closes
+          open24h
+          closed
+        }
+      }
+      status {
+        main
+      }
+      measurements {
+        weight {
+          value
+        }
+        packageQuantity {
+          value
+        }
+      }
+      events {
+        city
+        eventDescription
+        timestamp
+      }
     }
   }
 }

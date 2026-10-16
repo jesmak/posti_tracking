@@ -8,8 +8,8 @@ assignees: ""
 
 <!-- READ THIS FIRST:
 - Make sure you are running the latest version of Home Assistant and of this integration before reporting an issue.
-- Package data is personal. Remove names, addresses, tracking numbers, pickup codes and email addresses from
-  anything you paste here, logs included.
+- Personal data and secrets don't belong here. Remove names, addresses, email addresses, tracking numbers, pickup
+  codes, API keys and tokens from anything you paste, logs included.
 -->
 
 **Checklist:**

@@ -43,8 +43,10 @@ class PostiPackageEvent(CoordinatorEntity[PostiCoordinator], EventEntity):
         username = entry.data[CONF_USERNAME]
         self._attr_unique_id = f"posti_{username}_package"
         self._attr_device_info = coordinator.device_info
-        # The packages of the previous update. None until the first one has been seen.
-        self._seen: list[dict[str, Any]] | None = None
+        # Every package seen since Home Assistant started, as it last was, by Posti's shipment number. A package missing
+        # from one answer and back in the next is then compared with how it was, not reported as new. None until the
+        # first update has been seen.
+        self._seen: dict[str, dict[str, Any]] | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -55,7 +57,7 @@ class PostiPackageEvent(CoordinatorEntity[PostiCoordinator], EventEntity):
     def _handle_coordinator_update(self) -> None:
         packages = self._packages()
         changes = detect_changes(self._seen, packages)
-        self._seen = packages
+        self._seen = {**(self._seen or {}), **packages}
         # Written first, so that after a failed update the entity is available again before any event: an event written
         # straight over unavailable looks to an automation like the entity coming back, and is left out.
         super()._handle_coordinator_update()
@@ -64,7 +66,6 @@ class PostiPackageEvent(CoordinatorEntity[PostiCoordinator], EventEntity):
             # Each event is written on its own, so an automation sees every one of them.
             super()._handle_coordinator_update()
 
-    def _packages(self) -> list[dict[str, Any]]:
-        # Every package of the account, so one outside the list, or one that drops out of it and comes back, is seen as
-        # what it is.
-        return list(self.coordinator.data.every) if self.coordinator.data else []
+    def _packages(self) -> dict[str, dict[str, Any]]:
+        # Every package of the account, so one outside the list is seen too.
+        return dict(self.coordinator.data.every) if self.coordinator.data else {}

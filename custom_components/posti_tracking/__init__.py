@@ -17,17 +17,20 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     CONF_DEVICE,
     CONF_INCLUDE_PICKUP_DETAILS,
+    CONF_MAX_OUTGOING_SHIPMENTS,
+    CONF_MAX_SHIPMENTS,
     CONF_PASSWORD,
     CONF_PICKUP_CODE,
     CONF_TOKENS,
     CONF_USERNAME,
+    DEFAULT_MAX_SHIPMENTS,
     DOMAIN,
     PICKUP_CODE_CODE,
     PICKUP_CODE_NONE,
 )
 from .coordinator import PostiConfigEntry, PostiCoordinator
 from .device import Device, deactivate, refresh
-from .exceptions import PostiAuthError, PostiError
+from .exceptions import PostiDeviceGone, PostiError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,23 +67,26 @@ async def async_remove_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> No
         # and gives a fresh one to sign the deactivation with.
         try:
             id_token = (await refresh(session, device, id_token))["id_token"]
-        except PostiAuthError:
+        except PostiDeviceGone:
             _LOGGER.debug("The device of %s was no longer trusted, so there is nothing to deactivate", entry.entry_id)
             return
         except PostiError as err:
+            # A login too old to renew may still be trusted, so the deactivation is tried with the saved token.
             _LOGGER.debug("Couldn't renew the login before deactivating, trying with the saved one: %s", err)
         await deactivate(session, device, device.device_id, id_token)
     except PostiError as err:
+        # The entry id rather than its title, which is the account's email.
         _LOGGER.warning(
-            "Home Assistant couldn't remove itself from the trusted devices of %s (%s). Remove it in the OmaPosti app "
+            "Home Assistant couldn't remove itself from the trusted devices of entry %s (%s). Remove it in the OmaPosti app "
             "under More, Settings, Security settings",
-            entry.title,
+            entry.entry_id,
             err,
         )
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> bool:
-    """Gives 1.1 entries a unique id, drops the password of 1.2 ones, and turns the pickup switch of 1.3 into a choice."""
+    """Gives 1.1 entries a unique id, drops the password of 1.2 ones, turns the pickup switch of 1.3 into a choice, and
+    gives 1.4 entries a maximum for sent packages."""
     if entry.version != 1:
         return False
     if entry.minor_version < 2:
@@ -95,4 +101,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: PostiConfigEntry) -> b
         data = {key: value for key, value in entry.data.items() if key != CONF_INCLUDE_PICKUP_DETAILS}
         data[CONF_PICKUP_CODE] = PICKUP_CODE_CODE if entry.data.get(CONF_INCLUDE_PICKUP_DETAILS) else PICKUP_CODE_NONE
         hass.config_entries.async_update_entry(entry, data=data, minor_version=4)
+    if entry.minor_version < 5:
+        # The one maximum was for both directions, so sent packages get the same one the entry had.
+        data = {**entry.data, CONF_MAX_OUTGOING_SHIPMENTS: entry.data.get(CONF_MAX_SHIPMENTS, DEFAULT_MAX_SHIPMENTS)}
+        hass.config_entries.async_update_entry(entry, data=data, minor_version=5)
     return True
