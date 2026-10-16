@@ -75,6 +75,7 @@ def test_package_attributes() -> None:
     assert ready == {
         "origin": "Example Shop Oy",
         "origin_city": None,
+        "recipient": None,
         "destination": None,
         "destination_city": "LAPPEENRANTA",
         "shipment_number": "JJFI0001",
@@ -351,7 +352,8 @@ def test_a_sent_package_says_so_and_names_its_recipient() -> None:
     ).packages
     assert package["direction"] == "outgoing"
     assert package["origin"] is None, "its sender is the user"
-    assert package["destination"] == "Maija Mallikas"
+    assert package["recipient"] == "Maija Mallikas", "who it goes to, in its own key"
+    assert package["destination"] is None, "a place, not the recipient"
 
 
 def test_a_package_whose_direction_is_not_known_goes_with_the_received_ones() -> None:
@@ -402,3 +404,12 @@ def test_a_sent_package_coming_back_is_incoming(main: str, status: int) -> None:
     [package] = build_packages([returned], replace(SETTINGS, max_outgoing_shipments=0), "fi", NOW).packages
     assert (package["direction"], package["status"], package["raw_status"]) == ("incoming", status, main)
     assert package["origin"] == "Maija Mallikas", "from the one it was sent to"
+    assert package["recipient"] is None, "it comes to the user"
+
+
+def test_a_sent_home_delivery_names_its_recipient_once() -> None:
+    # A home delivery's destination is a person's name, the recipient's for a sent one, which recipient already holds.
+    home = sent("JJFI0702", "IN_TRANSPORT", event("2026-09-16T05:30:00Z", "Kuljetuksessa"))
+    home["delivery"] = {"destination": {"name": "Maija Mallikas", "city": "TAMPERE"}}
+    [package] = build_packages([home], SETTINGS, "fi", NOW).packages
+    assert (package["recipient"], package["destination"], package["destination_city"]) == ("Maija Mallikas", None, "TAMPERE")

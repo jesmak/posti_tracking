@@ -231,8 +231,11 @@ def package(shipment: Mapping[str, Any], event: Mapping[str, Any], language: str
         "origin": None if sent else other,
         # Posti no longer tells where a shipment was sent from.
         "origin_city": None,
-        # The pickup point when there is one, otherwise where it is delivered, or for a sent one the recipient.
-        "destination": text(address.get("publicName")) or text(destination.get("name")) or (other if sent else None),
+        # Who a sent one goes to, which package-tracker-card shows in the sender's place.
+        "recipient": other if sent else None,
+        # The pickup point when there is one, otherwise where it is delivered. That is a name, the receiver's own for a
+        # received one, so a sent one's would only repeat its recipient.
+        "destination": text(address.get("publicName")) or (None if sent else text(destination.get("name"))),
         "destination_city": text(address.get("city")) or text(destination.get("city")),
         "shipment_number": shipment_number,
         # Nor when it was added to the account.

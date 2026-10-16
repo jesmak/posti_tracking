@@ -131,7 +131,8 @@ The `packages` attribute lists the packages, and each package has these keys.
 | `raw_status`                      | Posti's status, such as `READY_FOR_PICKUP`                                                                  |
 | `direction`                       | `incoming`, or `outgoing` for a package sent from the account                                               |
 | `origin`                          | The sender. Empty for a package you sent                                                                    |
-| `destination`, `destination_city` | The pickup point, or where it is delivered, or the recipient of one you sent, and the city                  |
+| `recipient`                       | Who a package you sent goes to                                                                              |
+| `destination`, `destination_city` | The pickup point, or where it is delivered, and the city                                                    |
 | `latest_event`                    | The latest event, in the chosen language                                                                    |
 | `latest_event_city`               | Where the latest event happened                                                                             |
 | `latest_event_date`               | When the package last changed                                                                               |
