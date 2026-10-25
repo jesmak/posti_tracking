@@ -177,7 +177,8 @@ async def request_page(session: aiohttp.ClientSession, url: str, follow_redirect
                 raise PostiError(f"Posti's login page answered with status {response.status}")
             return response.headers.get("Location", ""), await response.text()
     except (aiohttp.ClientError, TimeoutError) as err:
-        raise PostiError(f"Posti couldn't be reached: {err}") from err
+        # A timeout's message is empty, so the type is the cause.
+        raise PostiError(f"Posti couldn't be reached: {str(err) or type(err).__name__}") from err
 
 
 async def request_json(session: aiohttp.ClientSession, method: str, url: str, **kwargs: Any) -> tuple[int, dict[str, Any]]:
@@ -190,7 +191,7 @@ async def request_json(session: aiohttp.ClientSession, method: str, url: str, **
             except ValueError as err:
                 raise PostiNotJson(status) from err
     except (aiohttp.ClientError, TimeoutError) as err:
-        raise PostiError(f"Posti couldn't be reached: {err}") from err
+        raise PostiError(f"Posti couldn't be reached: {str(err) or type(err).__name__}") from err
     if not isinstance(body, dict):
         raise PostiError(f"Posti answered in an unexpected format (status {status})")
     return status, body

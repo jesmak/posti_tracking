@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
@@ -109,6 +110,22 @@ async def test_server_errors_are_not_login_problems(hass: HomeAssistant, aioclie
     with pytest.raises(PostiError) as error:
         await client(hass, VALID_TOKENS).shipments("fi")
     assert not isinstance(error.value, PostiAuthError)
+
+
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (TimeoutError(), "OmaPosti couldn't be reached: TimeoutError"),
+        (aiohttp.ClientConnectionError("Connection refused"), "OmaPosti couldn't be reached: Connection refused"),
+    ],
+)
+async def test_an_error_without_a_message_is_named(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any, error: Exception, message: str
+) -> None:
+    aioclient_mock.post(GRAPH_API_URL, exc=error)
+    with pytest.raises(PostiError) as raised:
+        await client(hass, VALID_TOKENS).shipments("fi")
+    assert str(raised.value) == message
 
 
 async def test_a_login_without_a_consumer_role(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:

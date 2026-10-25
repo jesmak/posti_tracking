@@ -95,7 +95,8 @@ async def query_shipments(session: aiohttp.ClientSession, tokens: Mapping[str, A
                 return response.status, None
             return response.status, await response.json(content_type=None)
     except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-        raise PostiError(f"OmaPosti couldn't be reached: {err}") from err
+        # A timeout's message is empty, and the coordinator logs only the first failure, so the type is the cause.
+        raise PostiError(f"OmaPosti couldn't be reached: {str(err) or type(err).__name__}") from err
 
 
 def graphql_errors(body: Any) -> list[Mapping[str, Any]]:

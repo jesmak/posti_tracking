@@ -5,13 +5,14 @@ from __future__ import annotations
 import base64
 import hashlib
 
+import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.posti_tracking.const import AUTH_SERVICE_URL
-from custom_components.posti_tracking.exceptions import InvalidReturnAddress, PostiAuthError
+from custom_components.posti_tracking.exceptions import InvalidReturnAddress, PostiAuthError, PostiError
 from custom_components.posti_tracking.login import (
     StrongLogin,
     authentication_methods,
@@ -20,6 +21,8 @@ from custom_components.posti_tracking.login import (
     checked_return_address,
     finish_login,
     new_pkce,
+    request_json,
+    request_page,
     start_login,
 )
 
@@ -124,3 +127,20 @@ async def test_an_authentication_posti_no_longer_accepts(hass: HomeAssistant, ai
 
     with pytest.raises(PostiAuthError):
         await finish_login(async_get_clientsession(hass), login, RETURN_ADDRESS)
+
+
+@pytest.mark.parametrize("error", [TimeoutError(), aiohttp.ClientConnectionError("Connection refused")], ids=["timeout", "message"])
+@pytest.mark.parametrize("request_", ["page", "json"])
+async def test_an_error_without_a_message_is_named(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, request_: str, error: Exception
+) -> None:
+    url = f"{AUTH_SERVICE_URL}/device_login"
+    session = async_get_clientsession(hass)
+    with pytest.raises(PostiError) as raised:
+        if request_ == "page":
+            aioclient_mock.get(url, exc=error)
+            await request_page(session, url)
+        else:
+            aioclient_mock.post(url, exc=error)
+            await request_json(session, "POST", url)
+    assert str(raised.value) == f"Posti couldn't be reached: {str(error) or 'TimeoutError'}"
