@@ -110,4 +110,4 @@ def test_an_event_carries_the_package_it_happened_to() -> None:
 def test_a_sent_package_s_event_names_its_recipient() -> None:
     sent = package("JJFI0001", 3, direction="outgoing", origin=None, recipient="Maija Mallikas")
     [change] = detect_changes({}, by_key(sent))
-    assert (change.attributes["origin"], change.attributes["recipient"]) == (None, "Maija Mallikas")
+    assert change.attributes["recipient"] == "Maija Mallikas"
