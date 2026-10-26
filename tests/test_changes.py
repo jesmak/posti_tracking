@@ -24,6 +24,7 @@ def package(number: str, status: int, changed: str = "2026-09-16T05:30:00Z", **r
         "latest_event_city": "HELSINKI",
         "latest_event_date": changed,
         "origin": "Example Shop Oy",
+        "recipient": None,
         "destination": "Example Market Keskusta",
         "destination_city": "LAPPEENRANTA",
         "source": "Posti",
@@ -96,6 +97,7 @@ def test_an_event_carries_the_package_it_happened_to() -> None:
         "raw_status": "IN_TRANSPORT",
         "direction": "incoming",
         "origin": "Example Shop Oy",
+        "recipient": None,
         "destination": "Example Market Keskusta",
         "destination_city": "LAPPEENRANTA",
         "latest_event": "Kuljetuksessa",
@@ -103,3 +105,9 @@ def test_an_event_carries_the_package_it_happened_to() -> None:
         "latest_event_date": "2026-09-16T05:30:00Z",
         "source": "Posti",
     }
+
+
+def test_a_sent_package_s_event_names_its_recipient() -> None:
+    sent = package("JJFI0001", 3, direction="outgoing", origin=None, recipient="Maija Mallikas")
+    [change] = detect_changes({}, by_key(sent))
+    assert (change.attributes["origin"], change.attributes["recipient"]) == (None, "Maija Mallikas")

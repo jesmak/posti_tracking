@@ -198,7 +198,7 @@ leaves them out with a condition, as in the example below.
 | `returned`         | It was returned to the sender                 |
 
 The event carries the package it happened to, with `shipment_number`, `status`, `raw_status`, `direction`, `origin`,
-`destination`, `destination_city`, `latest_event`, `latest_event_city`, `latest_event_date` and `source`.
+`recipient`, `destination`, `destination_city`, `latest_event`, `latest_event_city`, `latest_event_date` and `source`.
 
 Nothing fires for the packages that are already there when Home Assistant starts, or when the integration is reloaded,
 since they have not just happened. A change while Home Assistant was off fires nothing either. A package missing from
