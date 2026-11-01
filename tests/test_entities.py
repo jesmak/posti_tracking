@@ -17,6 +17,7 @@ from custom_components.posti_tracking.const import DOMAIN, GRAPH_API_URL
 from .conftest import ENTRY_DATA, NOW, USERNAME, event, page_of, shipment
 
 EVENT_ENTITY = "event.posti_matti_meikalainen_example_com_package"
+PACKAGES = "sensor.posti_matti_meikalainen_example_com"
 ON_THE_WAY = "sensor.posti_matti_meikalainen_example_com_incoming_on_the_way"
 READY = "sensor.posti_matti_meikalainen_example_com_incoming_ready_for_pickup"
 SENT_ON_THE_WAY = "sensor.posti_matti_meikalainen_example_com_sent_on_the_way"
@@ -55,6 +56,19 @@ async def test_the_counts_of_the_packages(
     registry = er.async_get(hass)
     assert registry.async_get(ON_THE_WAY).unique_id == f"posti_{USERNAME}_on_the_way"
     assert registry.async_get(READY).unique_id == f"posti_{USERNAME}_ready_for_pickup"
+
+
+async def test_the_time_of_the_check_moves_with_every_update(
+    hass: HomeAssistant, omaposti: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
+) -> None:
+    await set_up(hass, freezer)
+    assert hass.states.get(PACKAGES).attributes["last_checked"] == NOW.isoformat()
+
+    # Nothing has changed in the account, and the time moves all the same: that is what it tells.
+    freezer.tick(timedelta(minutes=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get(PACKAGES).attributes["last_checked"] == (NOW + timedelta(minutes=11)).isoformat()
 
 
 async def test_the_packages_already_there_are_not_events(

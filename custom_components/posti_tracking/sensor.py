@@ -16,6 +16,7 @@ from .coordinator import PostiConfigEntry, PostiCoordinator
 from .shipments import DIRECTION_OUTGOING, FINISHED, STATUS_READY_FOR_PICKUP
 
 ATTR_PACKAGES = "packages"
+ATTR_LAST_CHECKED = "last_checked"
 
 
 # The coordinator fetches for every entity at once, so the entities themselves update nothing.
@@ -55,8 +56,9 @@ def ready(package: Mapping[str, Any]) -> bool:
 class PostiSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):
     """The time a package of the account last changed, such as when it arrived or was delivered."""
 
-    # The packages change with every event and would fill the database; the state is history enough.
-    _unrecorded_attributes = frozenset({ATTR_PACKAGES})
+    # The packages change with every event and the time of the check with every update, and would fill the database. The
+    # state is history enough.
+    _unrecorded_attributes = frozenset({ATTR_PACKAGES, ATTR_LAST_CHECKED})
     _attr_attribution = ATTRIBUTION
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_has_entity_name = True
@@ -78,7 +80,11 @@ class PostiSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {ATTR_PACKAGES: self.coordinator.data.packages if self.coordinator.data else []}
+        checked = self.coordinator.last_checked
+        return {
+            ATTR_PACKAGES: self.coordinator.data.packages if self.coordinator.data else [],
+            ATTR_LAST_CHECKED: checked.isoformat() if checked else None,
+        }
 
 
 class PostiCountSensor(CoordinatorEntity[PostiCoordinator], SensorEntity):

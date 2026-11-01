@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -39,6 +40,8 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
         self.settings = PackageSettings.from_data(entry.data)
         self.language = entry.data[CONF_LANGUAGE]
         self.client = PostiClient(hass, Device.from_data(entry.data[CONF_DEVICE]), entry.data[CONF_TOKENS], self._save_tokens)
+        # When the packages were last read from Posti, whether or not anything had changed.
+        self.last_checked: datetime | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -66,4 +69,7 @@ class PostiCoordinator(DataUpdateCoordinator[Packages]):
             raise ConfigEntryAuthFailed(str(err)) from err
         except PostiError as err:
             raise UpdateFailed(str(err)) from err
-        return build_packages(shipments, self.settings, self.language, dt_util.utcnow())
+        now = dt_util.utcnow()
+        packages = build_packages(shipments, self.settings, self.language, now)
+        self.last_checked = now
+        return packages

@@ -165,8 +165,10 @@ A package you sent that comes back to you is incoming while it does, since it is
 the statuses again, so that it counts, fires its events and shows like any package you are to collect, and its
 `raw_status` keeps the `RETURN_` prefix. Its delivery back is `6`.
 
-Times are ISO 8601 in UTC. Packages without events, which Posti has only been told about, aren't listed. The packages
-aren't stored in the recorder, only the state. The sensor is unavailable while Posti can't be reached.
+The `last_checked` attribute is when the packages were last read from Posti, whether or not anything had changed.
+
+Times are ISO 8601 in UTC. Packages without events, which Posti has only been told about, aren't listed. Neither
+attribute is stored in the recorder, only the state. The sensor is unavailable while Posti can't be reached.
 
 ### Counts
 
