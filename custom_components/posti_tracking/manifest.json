@@ -1,6 +1,7 @@
 {
   "domain": "posti_tracking",
   "name": "Posti package tracking",
+  "categories": ["productivity_information"],
   "codeowners": [
     "@jesmak"
   ],
