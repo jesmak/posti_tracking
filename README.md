@@ -2,7 +2,7 @@
 
 Home Assistant integration that follows the packages of an OmaPosti account.
 
-[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
+[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Downloads][downloads-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
 
 <img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-light.png#gh-light-mode-only" width="560" alt="A dashboard with the counts of incoming packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one sent to someone else, one on its way and one delivered, each marked incoming or sent">
 <img src="https://raw.githubusercontent.com/jesmak/posti_tracking/main/docs/images/dashboard-dark.png#gh-dark-mode-only" width="560" alt="A dashboard with the counts of incoming packages on the way and ready for pickup, and package-tracker-card listing a package ready for pickup with its code and QR code button, one sent to someone else, one on its way and one delivered, each marked incoming or sent">
@@ -332,6 +332,7 @@ MIT, see [LICENSE](LICENSE).
 [releases-shield]: https://img.shields.io/github/release/jesmak/posti_tracking.svg?style=for-the-badge
 [release-date-shield]: https://img.shields.io/github/release-date/jesmak/posti_tracking?style=for-the-badge
 [releases]: https://github.com/jesmak/posti_tracking/releases
+[downloads-shield]: https://img.shields.io/github/downloads/jesmak/posti_tracking/total.svg?style=for-the-badge
 [marketplace-shield]: https://img.shields.io/badge/Marketplace-Custom-orange.svg?style=for-the-badge
 [marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=jesmak&repository=posti_tracking&category=integration
 [license-shield]: https://img.shields.io/github/license/jesmak/posti_tracking.svg?style=for-the-badge
