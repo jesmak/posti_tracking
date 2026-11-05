@@ -61,7 +61,7 @@ from .const import (
     PICKUP_CODE_OPTIONS,
     UAS_HOST,
 )
-from .device import Device, deactivate, jwt_payload, provision, refresh
+from .device import Device, deactivate, first_refresh, jwt_payload, provision, refresh
 from .exceptions import InvalidReturnAddress, PostiAuthError, PostiError
 from .login import StrongLogin, bank_address, finish_login, start_login
 
@@ -256,7 +256,8 @@ class PostiConfigFlow(ConfigFlow, domain=DOMAIN):
         session = self._http()
         device: Device | None = None
         try:
-            device, tokens = await provision(session, tokens)
+            device = await provision(session, tokens)
+            tokens = {**tokens, **await first_refresh(session, device, tokens)}
             tokens = {**tokens, **await refresh(session, device, tokens["id_token"])}
             # The first page is enough to know the packages can be read, in whichever language.
             shipments_in(*await query_shipments(session, tokens, 1, "en"))

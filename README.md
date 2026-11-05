@@ -55,8 +55,8 @@ The authentication happens entirely in your browser. Your bank credentials never
 integration. The only thing sent to Home Assistant is the address you paste.
 
 After that the integration never needs your bank again. It keeps the login alive with its own device key, the way the
-app does, also over restarts and longer breaks. You need to log in again only if the device is removed from your
-account, and then Home Assistant asks for it on the integration page.
+app does, also over restarts and longer breaks. You need to log in again only if Posti stops trusting the device, as
+when it is removed from your account, and then Home Assistant asks for it on the integration page.
 
 Because it imitates the app, a change in Posti's login can stop the integration until it is updated.
 
@@ -211,7 +211,6 @@ one of Posti's answers and back in the next is compared with how it was, not rep
 A notification for every package that can be picked up, leaving out the ones sent from the account. The trigger
 watches every event, not only a change of its type, so the second package ready in a row isn't missed. `queued` keeps
 the events of one update from being dropped.
-
 
 ```yaml
 automation:

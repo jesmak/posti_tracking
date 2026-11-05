@@ -231,3 +231,45 @@ async def test_sent_packages_are_counted_apart(
     assert hass.states.get(SENT_ON_THE_WAY).state == "2"
     assert hass.states.get(SENT_READY).state == "1"
     assert er.async_get(hass).async_get(SENT_ON_THE_WAY).unique_id == f"posti_{USERNAME}_outgoing_on_the_way"
+
+
+async def test_the_counts_include_packages_the_list_has_no_room_for(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
+) -> None:
+    shipments = [shipment(f"JJFI070{n}", "IN_TRANSPORT", event(f"2026-09-16T08:0{n}:00Z", "Kuljetuksessa")) for n in range(7)]
+    aioclient_mock.post(GRAPH_API_URL, side_effect=lambda *_: answer(shipments))
+    await set_up(hass, freezer)
+
+    assert len(hass.states.get(PACKAGES).attributes["packages"]) == 5
+    assert hass.states.get(ON_THE_WAY).state == "7"
+
+
+async def test_a_package_missing_from_one_answer_is_not_new_when_it_comes_back(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any, freezer: FrozenDateTimeFactory
+) -> None:
+    both = [
+        shipment("JJFI0801", "IN_TRANSPORT", event("2026-09-16T08:30:00Z", "Kuljetuksessa")),
+        shipment("JJFI0802", "IN_TRANSPORT", event("2026-09-16T08:40:00Z", "Kuljetuksessa")),
+    ]
+    shipments = list(both)
+    aioclient_mock.post(GRAPH_API_URL, side_effect=lambda *_: answer(shipments))
+    await set_up(hass, freezer)
+    fired: list[str] = []
+    hass.bus.async_listen(
+        "state_changed",
+        callback(
+            lambda call: (
+                fired.append(call.data["new_state"].attributes.get("event_type"))
+                if call.data["entity_id"] == EVENT_ENTITY and call.data["new_state"]
+                else None
+            )
+        ),
+    )
+
+    for answer_now in (both[:1], [], both):
+        shipments[:] = answer_now
+        freezer.tick(timedelta(minutes=11))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    assert fired == [], "nothing happened to the packages"

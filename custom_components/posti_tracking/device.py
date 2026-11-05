@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from .const import APP_USER_AGENT, AUTH_SERVICE_URL, DEVICE_MODEL, MFA_URL
-from .exceptions import PostiAuthError, PostiDeviceGone, PostiError, PostiNotJson
+from .exceptions import PostiAuthError, PostiDeviceGone, PostiError
 from .login import APP_HEADERS, new_pkce, request_json
 
 PSS = padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32)
@@ -68,8 +68,8 @@ class Device:
         return key
 
 
-async def provision(session: aiohttp.ClientSession, tokens: Mapping[str, Any]) -> tuple[Device, dict[str, Any]]:
-    """Registers a new device for the account of a fresh login. Returns the device and the login's renewed tokens.
+async def provision(session: aiohttp.ClientSession, tokens: Mapping[str, Any]) -> Device:
+    """Registers a new device for the account of a fresh login. Its tokens are renewed next with first_refresh.
 
     A login can register only one device: Posti refuses a second one with
     DIRECT_PROVISIONING_AUTHENTICATION_ALREADY_USED.
@@ -119,23 +119,21 @@ async def provision(session: aiohttp.ClientSession, tokens: Mapping[str, Any]) -
     if status not in (200, 201) or not isinstance(device_id, str):
         raise PostiError(f"Posti didn't register the device (status {status}): {error_of(registered)}")
 
-    device = Device(
+    return Device(
         device_id,
         key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode(),
         base64.b64encode(salt).decode(),
         subject,
     )
-    return device, {**tokens, **await first_refresh(session, device, key, tokens)}
 
 
-async def first_refresh(
-    session: aiohttp.ClientSession, device: Device, key: rsa.RSAPrivateKey, tokens: Mapping[str, Any]
-) -> dict[str, Any]:
+async def first_refresh(session: aiohttp.ClientSession, device: Device, tokens: Mapping[str, Any]) -> dict[str, Any]:
     """Renews the tokens of the login that registered the device, with its refresh token and a device trust token.
 
     This is the order in which the proof of the protocol ran before the first vault refresh. Whether the vault
     refresh would also work without it is unknown, so it is kept.
     """
+    key = await load_key(device)
     status, body = await request_json(
         session,
         "POST",
@@ -165,20 +163,16 @@ async def refresh(session: aiohttp.ClientSession, device: Device, id_token: str)
 
     The device's vault holds the refresh key, encrypted for the device. It is fetched and opened anew every time.
     """
-    key = device.key()
-    try:
-        status, body = await request_json(
-            session, "POST", f"{MFA_URL}/device_refresh", headers=bearer_headers(id_token), json=signed_body(device, key)
-        )
-    except PostiNotJson as err:
-        # Any 401 or 403 needs a new login, whatever its body is.
-        if err.status in (401, 403):
-            raise PostiAuthError(f"Posti refused to renew the login (status {err.status})") from err
-        raise
+    key = await load_key(device)
+    status, body = await request_json(
+        session, "POST", f"{MFA_URL}/device_refresh", headers=bearer_headers(id_token), json=signed_body(device, key)
+    )
     if error_of(body) in DEVICE_GONE:
         raise PostiDeviceGone(f"The device is no longer trusted, it has been deactivated in OmaPosti ({error_of(body)})")
-    # A login too old to renew with is refused the same way, and only a new login helps. A 404 without one of the codes
-    # above is no sign of a removed device: an endpoint that moved shouldn't send anyone to their bank.
+    # A login too old to renew with is taken to be refused the same way, in the MFA service's JSON, and only a new login
+    # helps. A 401 or 403 without JSON, such as a firewall's page, raised PostiNotJson above and is tried again at the
+    # next update. A 404 without one of the codes above is no sign of a removed device either: an endpoint that moved
+    # shouldn't send anyone to their bank.
     if status in (401, 403):
         raise PostiAuthError(f"Posti refused to renew the login (status {status}): {error_of(body)}")
     trust_token = body.get("device_trust_token")
@@ -207,7 +201,7 @@ async def deactivate(session: aiohttp.ClientSession, device: Device, target_id: 
     Never use POST /deactivations without a device: it turns off the account's trusted devices altogether, the phones
     with the OmaPosti app included.
     """
-    key = device.key()
+    key = await load_key(device)
     timestamp = next_timestamp(device)
     context = base64.urlsafe_b64encode(hashlib.sha256(f"deprovision_device|{target_id}".encode()).digest())
     status, body = await request_json(
@@ -227,6 +221,11 @@ async def deactivate(session: aiohttp.ClientSession, device: Device, target_id: 
     )
     if status not in (200, 201):
         raise PostiError(f"Posti didn't deactivate the device (status {status}): {error_of(body)}")
+
+
+async def load_key(device: Device) -> rsa.RSAPrivateKey:
+    # Loading checks the key, which takes tens of milliseconds, too long for the event loop. Signing takes well under one.
+    return await asyncio.get_running_loop().run_in_executor(None, device.key)
 
 
 def new_key() -> rsa.RSAPrivateKey:

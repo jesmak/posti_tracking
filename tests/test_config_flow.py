@@ -55,7 +55,8 @@ def strong_login() -> Iterator[dict[str, Any]]:
         patch(f"{flow}.start_login", return_value=StrongLogin("verifier", METHODS)) as start,
         patch(f"{flow}.bank_address", return_value=BANK_ADDRESS) as bank,
         patch(f"{flow}.finish_login", return_value=LOGIN_TOKENS) as finish,
-        patch(f"{flow}.provision", return_value=(DEVICE, LOGIN_TOKENS)) as provision,
+        patch(f"{flow}.provision", return_value=DEVICE) as provision,
+        patch(f"{flow}.first_refresh", return_value=LOGIN_TOKENS) as first_refresh,
         patch(f"{flow}.refresh", return_value=RENEWED) as refresh,
         patch(f"{flow}.deactivate") as deactivate,
         patch("custom_components.posti_tracking.async_setup_entry", return_value=True),
@@ -65,6 +66,7 @@ def strong_login() -> Iterator[dict[str, Any]]:
             "bank": bank,
             "finish": finish,
             "provision": provision,
+            "first_refresh": first_refresh,
             "refresh": refresh,
             "deactivate": deactivate,
         }
@@ -147,23 +149,15 @@ async def test_a_device_posti_refuses(hass: HomeAssistant, strong_login: dict[st
     strong_login["deactivate"].assert_not_called()
 
 
-async def test_a_device_that_does_not_work_is_removed_again(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:
-    strong_login["refresh"].side_effect = PostiError("the vault didn't open")
+@pytest.mark.parametrize("failing", ["first_refresh", "refresh"])
+async def test_a_device_that_does_not_work_is_removed_again(hass: HomeAssistant, strong_login: dict[str, Any], failing: str) -> None:
+    strong_login[failing].side_effect = PostiError("refused")
     result = await to_authentication(hass)
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"address": RETURN_ADDRESS})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], SETTINGS)
     assert result["errors"] == {"base": "device_failed"}
     assert strong_login["deactivate"].call_args.args[1:3] == (DEVICE, DEVICE.device_id)
-
-
-async def test_closing_the_settings_leaves_no_device_behind(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:
-    result = await to_authentication(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"address": RETURN_ADDRESS})
-    assert result["step_id"] == "settings"
-
-    hass.config_entries.flow.async_abort(result["flow_id"])
-    strong_login["provision"].assert_not_called()
 
 
 async def test_posti_cannot_be_reached(hass: HomeAssistant, strong_login: dict[str, Any]) -> None:

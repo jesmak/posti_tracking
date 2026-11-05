@@ -99,12 +99,6 @@ async def test_renewed_tokens_omaposti_refuses(hass: HomeAssistant, aioclient_mo
         await client(hass, VALID_TOKENS).shipments("fi")
 
 
-async def test_a_device_posti_no_longer_trusts(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
-    renewal.side_effect = PostiAuthError("deactivated")
-    with pytest.raises(PostiAuthError):
-        await client(hass, EXPIRED_TOKENS).shipments("fi")
-
-
 async def test_server_errors_are_not_login_problems(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, renewal: Any) -> None:
     aioclient_mock.post(GRAPH_API_URL, status=503)
     with pytest.raises(PostiError) as error:

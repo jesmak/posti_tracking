@@ -105,29 +105,33 @@ async def test_renewing_the_tokens(hass: HomeAssistant, aioclient_mock: AiohttpC
     [
         (403, {"error": {"code": 403, "message": "INACTIVE_DEVICE", "translations": {"en": "Not trusted"}}}),
         (404, {"error": {"code": 404, "message": "NO_DEVICE_FOUND"}}),
-        (401, {"error": {"code": 401, "message": "UNAUTHORIZED"}}),
     ],
 )
-async def test_a_deactivated_device(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, answer: dict) -> None:
+async def test_a_removed_device(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, answer: dict) -> None:
     aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, json=answer)
-
-    with pytest.raises(PostiAuthError):
-        await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
-
-
-async def test_a_removed_device_is_told_apart_from_a_refused_renewal(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:
-    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=404, json={"error": {"code": 404, "message": "NO_DEVICE_FOUND"}})
 
     with pytest.raises(PostiDeviceGone):
         await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
 
 
 @pytest.mark.parametrize("status", [401, 403])
-async def test_a_refusal_without_json_asks_for_a_new_login(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int) -> None:
-    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, text="")
+async def test_a_refused_renewal_asks_for_a_new_login(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int) -> None:
+    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, json={"error": {"code": status, "message": "UNAUTHORIZED"}})
 
-    with pytest.raises(PostiAuthError):
+    with pytest.raises(PostiAuthError) as raised:
         await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
+    assert not isinstance(raised.value, PostiDeviceGone)
+
+
+@pytest.mark.parametrize(("status", "text"), [(401, ""), (403, ""), (403, "<html><body>Request blocked</body></html>")])
+async def test_a_refusal_without_json_is_tried_again(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, status: int, text: str
+) -> None:
+    aioclient_mock.post(f"{MFA_URL}/device_refresh", status=status, text=text)
+
+    with pytest.raises(PostiError) as raised:
+        await refresh(async_get_clientsession(hass), DEVICE, ID_TOKEN)
+    assert not isinstance(raised.value, PostiAuthError), "a firewall's page doesn't send anyone to their bank"
 
 
 async def test_other_vault_errors_are_not_reauthentication(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> None:

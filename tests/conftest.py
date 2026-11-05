@@ -12,15 +12,13 @@ from unittest.mock import patch
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker, AiohttpClientMockResponse
 
-from custom_components.posti_tracking.const import AUTH_SERVICE_URL, GRAPH_API_URL
+from custom_components.posti_tracking.const import GRAPH_API_URL
 
 USERNAME = "matti.meikalainen@example.com"
 PASSWORD = "salasana"
 
 # When the tests run.
 NOW = datetime(2026, 9, 16, 9, 0, tzinfo=UTC)
-
-TOKEN_URL = f"{AUTH_SERVICE_URL}/token_v2"
 
 
 def jwt(expires: datetime, **claims: Any) -> str:
