@@ -10,7 +10,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker, AiohttpClientMockResponse
+from pytest_homeassistant.test_util.aiohttp import AiohttpClientMocker, AiohttpClientMockResponse
 
 from custom_components.posti_tracking.const import GRAPH_API_URL
 
@@ -56,11 +56,6 @@ DEVICE_DATA = {"device_id": "device-1", "private_key": "private key", "salt": "c
 ENTRY_DATA = {"username": USERNAME, **SETTINGS, "device": DEVICE_DATA, "tokens": VALID_TOKENS}
 # An entry of 2.x and earlier, which logged in with a password.
 PASSWORD_ENTRY_DATA = {"username": USERNAME, "password": PASSWORD, **SETTINGS, "tokens": VALID_TOKENS}
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
-    """Lets Home Assistant load integrations from custom_components/."""
 
 
 def event(timestamp: str, description: str, city: str = "LAPPEENRANTA") -> dict[str, Any]:

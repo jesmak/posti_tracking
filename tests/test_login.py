@@ -9,7 +9,7 @@ import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+from pytest_homeassistant.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.posti_tracking.const import AUTH_SERVICE_URL
 from custom_components.posti_tracking.exceptions import InvalidReturnAddress, PostiAuthError, PostiError

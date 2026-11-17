@@ -8,7 +8,7 @@ from typing import Any
 import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+from pytest_homeassistant.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.posti_tracking.api import PostiClient, refused, shipments_in, token_expires_soon
 from custom_components.posti_tracking.const import GRAPH_API_URL
